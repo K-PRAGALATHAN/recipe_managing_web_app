@@ -11,16 +11,16 @@ import {
   X,
 } from 'lucide-react';
 
-const Layout = ({ children, userRole = 'Chef', userEmail, onLogout }) => {
+const Layout = ({ children, userRole = 'Chef', userEmail, onLogout, activeNav = 'dashboard', onNavigate }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const displayName = userEmail ? userEmail.split('@')[0] : 'User';
   const avatarLetter = (displayName?.trim()?.[0] || userRole?.trim()?.[0] || 'U').toUpperCase();
 
   const navigation = [
-    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, roles: ['Manager', 'Chef'] },
-    { name: 'Recipes', icon: <UtensilsCrossed size={20} />, roles: ['Manager', 'Chef', 'Cook'] },
-    { name: 'Inventory', icon: <ClipboardList size={20} />, roles: ['Manager', 'Chef'] },
-    { name: 'Settings', icon: <Settings size={20} />, roles: ['Manager'] },
+    { id: 'dashboard', name: 'Dashboard', icon: <LayoutDashboard size={20} />, roles: ['Manager'] },
+    { id: 'recipes', name: 'Recipes', icon: <UtensilsCrossed size={20} />, roles: ['Manager', 'Chef', 'Cook'] },
+    { id: 'inventory', name: 'Inventory', icon: <ClipboardList size={20} />, roles: ['Manager', 'Chef'] },
+    { id: 'settings', name: 'Settings', icon: <Settings size={20} />, roles: ['Manager'] },
   ];
 
   return (
@@ -51,14 +51,28 @@ const Layout = ({ children, userRole = 'Chef', userEmail, onLogout }) => {
             {/* Navigation Links */}
             <nav className="space-y-1">
               {navigation.filter(item => item.roles.includes(userRole)).map((item) => (
-                <a
-                  key={item.name}
-                  href="#"
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all group"
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    onNavigate?.(item.id);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 transition-all group ${
+                    activeNav === item.id
+                      ? 'bg-zinc-800 text-white'
+                      : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                  }`}
                 >
-                  <span className="group-hover:text-orange-500">{item.icon}</span>
+                  <span
+                    className={`transition-colors ${
+                      activeNav === item.id ? 'text-orange-500' : 'group-hover:text-orange-500'
+                    }`}
+                  >
+                    {item.icon}
+                  </span>
                   <span className="font-medium">{item.name}</span>
-                </a>
+                </button>
               ))}
             </nav>
           </div>

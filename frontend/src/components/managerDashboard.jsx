@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, Building2, Calculator, CheckCircle2, Download, Package, Plus, Trash2, XCircle } from 'lucide-react';
 
 const formatCurrency = (value) =>
@@ -39,8 +39,8 @@ const INITIAL_INGREDIENTS = [
   { id: 'i3', name: 'Roma Tomatoes', unit: 'kg', unitCost: 2.2, onHand: 12, parLevel: 8, vendorId: 'v1' },
 ];
 
-export default function ManagerDashboard() {
-  const [tab, setTab] = useState('overview');
+export default function ManagerDashboard({ initialTab = 'overview', title = 'Manager' }) {
+  const [tab, setTab] = useState(initialTab);
   const [vendors, setVendors] = useState(INITIAL_VENDORS);
   const [ingredients, setIngredients] = useState(INITIAL_INGREDIENTS);
   const [newVendor, setNewVendor] = useState({ name: '', contact: '', leadTimeDays: 2 });
@@ -55,6 +55,10 @@ export default function ManagerDashboard() {
   const [marginInput, setMarginInput] = useState({ cost: 12.5, price: 24 });
   const [wasteLog, setWasteLog] = useState([]);
   const [wasteDraft, setWasteDraft] = useState({ ingredientId: INITIAL_INGREDIENTS[0]?.id ?? '', qty: 0.5, reason: 'Prep waste' });
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
 
   const vendorsById = useMemo(() => Object.fromEntries(vendors.map((v) => [v.id, v])), [vendors]);
   const ingredientsById = useMemo(() => Object.fromEntries(ingredients.map((i) => [i.id, i])), [ingredients]);
@@ -157,7 +161,7 @@ export default function ManagerDashboard() {
     <div className="p-6 lg:p-10">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-white">Manager</h1>
+          <h1 className="text-2xl font-black tracking-tight text-white">{title}</h1>
           <p className="text-zinc-400">Vendor & ingredient management, costing/margins, inventory & reports.</p>
         </div>
 

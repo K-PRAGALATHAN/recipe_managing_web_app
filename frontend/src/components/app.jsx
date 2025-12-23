@@ -1,57 +1,64 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Layout from './layout';
 import ChefPortal from './ChefPortal.jsx';
 import CookPortal from './CookPortal.jsx';
 import ManagerDashboard from './managerDashboard.jsx';
+import SettingsPage from './SettingsPage.jsx';
 
-const VIEWS_BY_ROLE = {
-  Manager: ['Manager', 'Chef', 'Cook'],
-  Chef: ['Chef', 'Cook'],
-  Cook: ['Cook'],
-};
+const NAV_ITEMS = [
+  { id: 'dashboard', roles: ['Manager'] },
+  { id: 'recipes', roles: ['Manager', 'Chef', 'Cook'] },
+  { id: 'inventory', roles: ['Manager', 'Chef'] },
+  { id: 'settings', roles: ['Manager'] },
+];
 
 export default function App({ session, onLogout }) {
-  const allowedViews = VIEWS_BY_ROLE[session?.role] ?? ['Cook'];
-  const [activeView, setActiveView] = useState(session?.role ?? 'Cook');
+  const userRole = session?.role ?? 'Cook';
+
+  const allowedNav = useMemo(
+    () => NAV_ITEMS.filter((item) => item.roles.includes(userRole)).map((item) => item.id),
+    [userRole],
+  );
+
+  const defaultNav = useMemo(() => (userRole === 'Manager' ? 'dashboard' : 'recipes'), [userRole]);
+
+  const [activeNav, setActiveNav] = useState(() => {
+    return allowedNav.includes(defaultNav) ? defaultNav : allowedNav[0] ?? 'recipes';
+  });
 
   useEffect(() => {
-    const fallback = session?.role ?? 'Cook';
-    setActiveView((prev) => (allowedViews.includes(prev) ? prev : fallback));
-  }, [session?.role, allowedViews]);
+    const fallback = allowedNav.includes(defaultNav) ? defaultNav : allowedNav[0] ?? 'recipes';
+    setActiveNav((prev) => (allowedNav.includes(prev) ? prev : fallback));
+  }, [allowedNav, defaultNav]);
 
   const renderContent = () => {
-    if (activeView === 'Manager') return <ManagerDashboard />;
-    if (activeView === 'Chef') return <ChefPortal />;
+    if (activeNav === 'settings') return <SettingsPage />;
+
+    if (userRole === 'Manager') {
+      if (activeNav === 'inventory') return <ManagerDashboard initialTab="inventory" title="Inventory" />;
+      if (activeNav === 'recipes') return <ChefPortal />;
+      return <ManagerDashboard initialTab="overview" title="Manager" />;
+    }
+
+    if (userRole === 'Chef') {
+      if (activeNav === 'inventory') return <ManagerDashboard initialTab="inventory" title="Inventory" />;
+      return <ChefPortal />;
+    }
+
     return <CookPortal />;
   };
 
   return (
-    <Layout userRole={activeView} userEmail={session?.email} onLogout={onLogout}>
+    <Layout
+      userRole={userRole}
+      userEmail={session?.email}
+      onLogout={onLogout}
+      activeNav={activeNav}
+      onNavigate={setActiveNav}
+    >
       <div className="px-4 py-4 lg:px-8 lg:py-6">
-        {allowedViews.length > 1 ? (
-          <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
-            <span className="mr-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              Switch View
-            </span>
-            {allowedViews.map((view) => (
-              <button
-                key={view}
-                type="button"
-                onClick={() => setActiveView(view)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  activeView === view
-                    ? 'bg-orange-600 border-orange-500 text-white'
-                    : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-orange-500/60'
-                }`}
-              >
-                {view}
-              </button>
-            ))}
-          </div>
-        ) : null}
         {renderContent()}
       </div>
     </Layout>
   );
 }
-
