@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ChefHat, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { supabase } from '../utils/supabaseClient';
 
 const DEMO_EMAIL = 'demo@recipe.com';
 const DEMO_PASSWORD = 'password123';
@@ -15,7 +16,7 @@ export default function LoginPage({ onSuccess }) {
 
   const canSubmit = useMemo(() => email.trim() && password.trim() && role, [email, password, role]);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
 
@@ -29,7 +30,19 @@ export default function LoginPage({ onSuccess }) {
       return;
     }
 
-    onSuccess?.({ email: email.trim(), role, remember });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) throw error;
+
+      // success: inform parent (App persists session and routes based on role)
+      onSuccess?.({ email: email.trim(), role, remember, user: data.user });
+    } catch (err) {
+      setError(err.message || 'Login failed');
+    }
   };
 
   return (
@@ -153,6 +166,22 @@ export default function LoginPage({ onSuccess }) {
               Sign In
             </button>
           </form>
+
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <p className="text-sm text-slate-600">Or continue with</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  // start OAuth redirect with Supabase (redirects back to app)
+                  supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                Sign in with Google
+              </button>
+            </div>
+          </div>
 
           <div className="mt-8 border-t border-slate-200 pt-6">
             <p className="text-center text-sm font-semibold text-slate-600">Demo Credentials:</p>
