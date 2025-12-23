@@ -1,24 +1,67 @@
-import React, { useMemo, useState } from 'react';
-import { ChefHat, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, ChefHat, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
+import { setRememberPreference } from '../utils/authStorage';
+import { setRolePreference } from '../utils/authPreferences';
+import { isLocalDemoEnabled } from '../utils/demoSession';
 
 const DEMO_EMAIL = 'demo@recipe.com';
 const DEMO_PASSWORD = 'password123';
 const ROLES = ['Manager', 'Chef', 'Cook'];
 
-export default function LoginPage({ onSuccess }) {
+export default function LoginPage({ onSuccess, initialError = '' }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('Cook');
   const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const supabaseConfigured = Boolean(supabase);
+  const localDemoEnabled = isLocalDemoEnabled();
+  const authAvailable = supabaseConfigured || localDemoEnabled;
+
+  useEffect(() => {
+    if (initialError) setError(initialError);
+  }, [initialError]);
 
   const canSubmit = useMemo(() => email.trim() && password.trim() && role, [email, password, role]);
+
+  const formatAuthError = (err) => {
+    const rawMessage = (err?.message || '').toLowerCase();
+
+    if (rawMessage.includes('invalid login credentials')) return 'Invalid email or password.';
+    if (rawMessage.includes('email not confirmed')) return 'Please confirm your email before signing in.';
+    if (rawMessage.includes('too many requests')) return 'Too many attempts. Please try again later.';
+    if (rawMessage.includes('failed to fetch') || rawMessage.includes('networkerror')) {
+      return 'Unable to reach the authentication service. Please try again.';
+    }
+
+    return "We couldn't sign you in. Please try again.";
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+
+    if (!supabaseConfigured) {
+      if (!localDemoEnabled) {
+        setError('Sign in is temporarily unavailable. Please try again later.');
+        if (import.meta.env.DEV) {
+          console.warn('Missing Supabase configuration: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY');
+        }
+        return;
+      }
+
+      if (email.trim().toLowerCase() !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
+        setError('Use the demo credentials shown below.');
+        return;
+      }
+
+      setRememberPreference(remember);
+      setRolePreference(role);
+      onSuccess?.({ email: DEMO_EMAIL, role, remember, demo: true });
+      return;
+    }
 
     if (!email.trim() || !password.trim()) {
       setError('Please enter your email and password.');
@@ -31,6 +74,9 @@ export default function LoginPage({ onSuccess }) {
     }
 
     try {
+      setRememberPreference(remember);
+      setRolePreference(role);
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
@@ -38,10 +84,17 @@ export default function LoginPage({ onSuccess }) {
 
       if (error) throw error;
 
+      try {
+        await supabase.auth.updateUser({ data: { role } });
+      } catch {
+        // ignore (role metadata is best-effort)
+      }
+
       // success: inform parent (App persists session and routes based on role)
       onSuccess?.({ email: email.trim(), role, remember, user: data.user });
     } catch (err) {
-      setError(err.message || 'Login failed');
+      if (import.meta.env.DEV) console.error(err);
+      setError(formatAuthError(err));
     }
   };
 
@@ -58,6 +111,23 @@ export default function LoginPage({ onSuccess }) {
         <p className="mt-2 text-center text-white/90">Sign in to your account</p>
 
         <div className="mt-10 w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl shadow-orange-900/25">
+          {!supabaseConfigured ? (
+            <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <div className="flex gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" aria-hidden="true" />
+                <div>
+                  <p className="font-semibold text-slate-800">
+                    {localDemoEnabled ? 'Supabase not configured' : 'Authentication unavailable'}
+                  </p>
+                  <p className="mt-1 text-slate-600">
+                    {localDemoEnabled
+                      ? 'Local demo mode is enabled. Use the demo credentials below to continue.'
+                      : 'Sign in is temporarily unavailable. Please try again later.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Email Address</label>
@@ -72,6 +142,7 @@ export default function LoginPage({ onSuccess }) {
                   autoComplete="email"
                   placeholder="you@example.com"
                   value={email}
+                  disabled={!authAvailable}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-3 text-slate-900 outline-none ring-orange-300 transition focus:border-orange-400 focus:ring-4"
                 />
@@ -90,12 +161,14 @@ export default function LoginPage({ onSuccess }) {
                   autoComplete="current-password"
                   placeholder="Enter your password"
                   value={password}
+                  disabled={!authAvailable}
                   onChange={(e) => setPassword(e.target.value)}
                   className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 text-slate-900 outline-none ring-orange-300 transition focus:border-orange-400 focus:ring-4"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
+                  disabled={!authAvailable}
                   className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
@@ -114,6 +187,7 @@ export default function LoginPage({ onSuccess }) {
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
+                  disabled={!authAvailable}
                   className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-10 text-slate-900 outline-none ring-orange-300 transition focus:border-orange-400 focus:ring-4"
                 >
                   {ROLES.map((r) => (
@@ -140,6 +214,7 @@ export default function LoginPage({ onSuccess }) {
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
+                  disabled={!authAvailable}
                   className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-400"
                 />
                 Remember me
@@ -160,7 +235,7 @@ export default function LoginPage({ onSuccess }) {
 
             <button
               type="submit"
-              disabled={!canSubmit}
+              disabled={!authAvailable || !canSubmit}
               className="h-12 w-full rounded-xl bg-gradient-to-r from-orange-600 to-amber-500 font-semibold text-white shadow-lg shadow-orange-600/25 transition hover:from-orange-700 hover:to-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Sign In
@@ -174,9 +249,26 @@ export default function LoginPage({ onSuccess }) {
                 type="button"
                 onClick={() => {
                   // start OAuth redirect with Supabase (redirects back to app)
-                  supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+                  if (!supabaseConfigured) {
+                    setError('Sign in is temporarily unavailable. Please try again later.');
+                    if (import.meta.env.DEV) {
+                      console.warn('Missing Supabase configuration: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY');
+                    }
+                    return;
+                  }
+                  setError('');
+                  setRememberPreference(remember);
+                  setRolePreference(role);
+
+                  const redirectTo = import.meta.env.VITE_OAUTH_REDIRECT_URL || window.location.origin;
+                  supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: { redirectTo },
+                  });
+                  onSuccess?.({ email: email.trim(), role, remember, oauthStarted: true });
                 }}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                disabled={!supabaseConfigured}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Sign in with Google
               </button>
@@ -204,6 +296,7 @@ export default function LoginPage({ onSuccess }) {
                     setRole('Manager');
                     setError('');
                   }}
+                  disabled={!authAvailable}
                 >
                   Use demo
                 </button>
