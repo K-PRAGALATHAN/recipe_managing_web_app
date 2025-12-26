@@ -1,9 +1,12 @@
 {
-  "name": "react-native",
+  "name": "recipe1project",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

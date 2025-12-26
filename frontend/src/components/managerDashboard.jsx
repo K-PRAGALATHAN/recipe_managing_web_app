@@ -57,6 +57,48 @@ export default function ManagerDashboard() {
   const [wasteDraft, setWasteDraft] = useState({ ingredientId: INITIAL_INGREDIENTS[0]?.id ?? '', qty: 0.5, reason: 'Prep waste' });
   const [newAccount, setNewAccount] = useState({ email: '', role: 'chef', cuisine: '' });
 
+  const fetchIngredients = async () => {
+    try {
+      const { data, error } = await supabase.from('ingredients').select('*');
+      if (error) {
+        console.error('Failed to load ingredients from Supabase', error);
+        return [];
+      }
+      setIngredients(data ?? []);
+      return data ?? [];
+    } catch (err) {
+      console.error('Error fetching ingredients', err);
+      return [];
+    }
+  };
+
+  const fetchVendors = async () => {
+    try {
+      const { data, error } = await supabase.from('vendors').select('*');
+      if (error) {
+        console.error('Failed to load vendors from Supabase', error);
+        return [];
+      }
+      setVendors(data ?? []);
+      return data ?? [];
+    } catch (err) {
+      console.error('Error fetching vendors', err);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!mounted) return;
+      await fetchVendors();
+      await fetchIngredients();
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const vendorsById = useMemo(() => Object.fromEntries(vendors.map((v) => [v.id, v])), [vendors]);
   const ingredientsById = useMemo(() => Object.fromEntries(ingredients.map((i) => [i.id, i])), [ingredients]);
 
@@ -103,43 +145,72 @@ export default function ManagerDashboard() {
   const buttonSecondary =
     'inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-semibold text-zinc-100 transition hover:border-orange-500/60';
 
-  const addVendor = () => {
+  const addVendor = async () => {
     const name = newVendor.name.trim();
     if (!name) return;
-    setVendors((prev) => [
-      ...prev,
-      {
-        id: `v${Date.now()}`,
-        name,
-        contact: newVendor.contact.trim() || '—',
-        leadTimeDays: Math.max(0, Number(newVendor.leadTimeDays) || 0),
-        active: true,
-      },
-    ]);
-    setNewVendor({ name: '', contact: '', leadTimeDays: 2 });
+
+    const payload = {
+      name,
+      contact: newVendor.contact.trim() || '—',
+      leadTimeDays: Math.max(0, Number(newVendor.leadTimeDays) || 0),
+      active: true,
+    };
+
+    try {
+      const { data, error } = await supabase.from('vendors').insert([payload]).select();
+      if (error) {
+        console.error('Failed to insert vendor', error);
+        return;
+      }
+      await fetchVendors();
+      setNewVendor({ name: '', contact: '', leadTimeDays: 2 });
+    } catch (err) {
+      console.error('Error adding vendor', err);
+    }
   };
 
-  const removeVendor = (vendorId) => {
-    setVendors((prev) => prev.filter((v) => v.id !== vendorId));
-    setIngredients((prev) => prev.map((i) => (i.vendorId === vendorId ? { ...i, vendorId: '' } : i)));
+  const removeVendor = async (vendorId) => {
+    try {
+      const { error } = await supabase.from('vendors').delete().eq('id', vendorId);
+      if (error) {
+        console.error('Failed to delete vendor', error);
+        return;
+      }
+      // clear vendorId from any ingredients that referenced this vendor
+      const { error: ingErr } = await supabase.from('ingredients').update({ vendorId: null }).eq('vendorId', vendorId);
+      if (ingErr) console.error('Failed to clear vendorId on ingredients', ingErr);
+      await fetchVendors();
+      await fetchIngredients();
+    } catch (err) {
+      console.error('Error removing vendor', err);
+    }
   };
 
-  const addIngredient = () => {
+  const addIngredient = async () => {
     const name = newIngredient.name.trim();
     if (!name) return;
-    setIngredients((prev) => [
-      ...prev,
-      {
-        id: `i${Date.now()}`,
-        name,
-        unit: newIngredient.unit.trim() || 'unit',
-        unitCost: Math.max(0, Number(newIngredient.unitCost) || 0),
-        onHand: Math.max(0, Number(newIngredient.onHand) || 0),
-        parLevel: Math.max(0, Number(newIngredient.parLevel) || 0),
-        vendorId: newIngredient.vendorId || '',
-      },
-    ]);
-    setNewIngredient((prev) => ({ ...prev, name: '', unitCost: 0, onHand: 0, parLevel: 0 }));
+
+    const payload = {
+      name,
+      unit: newIngredient.unit.trim() || 'unit',
+      unitCost: Number(newIngredient.unitCost) || 0,
+      onHand: Number(newIngredient.onHand) || 0,
+      parLevel: Number(newIngredient.parLevel) || 0,
+      vendorId: newIngredient.vendorId || null,
+    };
+
+    try {
+      const { data, error } = await supabase.from('ingredients').insert([payload]).select();
+      if (error) {
+        console.error('Failed to insert ingredient', error);
+        return;
+      }
+      // refresh list from DB to ensure UI sync
+      await fetchIngredients();
+      setNewIngredient((prev) => ({ ...prev, name: '', unitCost: 0, onHand: 0, parLevel: 0 }));
+    } catch (err) {
+      console.error('Error adding ingredient', err);
+    }
   };
 
   const updateIngredient = (ingredientId, patch) =>
