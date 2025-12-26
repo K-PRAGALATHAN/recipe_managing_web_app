@@ -1,5 +1,5 @@
 ﻿import React, { useMemo, useState } from 'react';
-import { AlertTriangle, BarChart3, Building2, Calculator, CheckCircle2, Download, Package, Plus, Trash2, XCircle } from 'lucide-react';
+import { AlertTriangle, BarChart3, Building2, Calculator, CheckCircle2, Download, Package, Plus, Settings, Trash2, XCircle } from 'lucide-react';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(
@@ -55,6 +55,7 @@ export default function ManagerDashboard() {
   const [marginInput, setMarginInput] = useState({ cost: 12.5, price: 24 });
   const [wasteLog, setWasteLog] = useState([]);
   const [wasteDraft, setWasteDraft] = useState({ ingredientId: INITIAL_INGREDIENTS[0]?.id ?? '', qty: 0.5, reason: 'Prep waste' });
+  const [newAccount, setNewAccount] = useState({ email: '', role: 'chef', cuisine: '' });
 
   const vendorsById = useMemo(() => Object.fromEntries(vendors.map((v) => [v.id, v])), [vendors]);
   const ingredientsById = useMemo(() => Object.fromEntries(ingredients.map((i) => [i.id, i])), [ingredients]);
@@ -90,6 +91,7 @@ export default function ManagerDashboard() {
     { id: 'vendors', label: 'Vendors', icon: <Building2 size={18} /> },
     { id: 'inventory', label: 'Inventory', icon: <Package size={18} /> },
     { id: 'costing', label: 'Costing', icon: <Calculator size={18} /> },
+    { id: 'settings', label: 'Settings', icon: <Settings size={18} /> },
     { id: 'reports', label: 'Reports', icon: <Download size={18} /> },
   ];
 
@@ -151,6 +153,37 @@ export default function ManagerDashboard() {
       ...prev,
     ]);
     setWasteDraft((prev) => ({ ...prev, qty: 0.5 }));
+  };
+
+  const addAccount = async () => {
+    const email = newAccount.email.trim();
+    if (!email) return;
+
+    try {
+      const response = await fetch('http://localhost:3001/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          role: newAccount.role,
+          cuisine: newAccount.cuisine.trim() || null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('Account created successfully!');
+        setNewAccount({ email: '', role: 'chef', cuisine: '' });
+      } else {
+        alert(`Error creating account: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating account:', error);
+      alert('Error creating account. Please try again.');
+    }
   };
 
   return (
@@ -602,6 +635,44 @@ export default function ManagerDashboard() {
                   <span className="text-sm font-bold text-white">{value}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === 'settings' ? (
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <div className={card}>
+            <p className="text-sm font-bold text-white">Add Account</p>
+            <p className="mt-1 text-xs text-zinc-500">Create new user accounts for staff or chefs.</p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Email</label>
+                <input className={input} type="email" value={newAccount.email} onChange={(e) => setNewAccount((p) => ({ ...p, email: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Role</label>
+                <select className={input} value={newAccount.role} onChange={(e) => setNewAccount((p) => ({ ...p, role: e.target.value }))}>
+                  <option value="chef">Chef</option>
+                  <option value="staff">Staff</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Cuisine (optional)</label>
+                <input className={input} value={newAccount.cuisine} onChange={(e) => setNewAccount((p) => ({ ...p, cuisine: e.target.value }))} />
+              </div>
+              <button type="button" className={button} onClick={addAccount} disabled={!newAccount.email.trim()}>
+                <Plus size={16} />
+                Add account
+              </button>
+            </div>
+          </div>
+
+          <div className={card}>
+            <p className="text-sm font-bold text-white">Account Management</p>
+            <p className="mt-1 text-xs text-zinc-500">Manage user roles and permissions.</p>
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-zinc-400">Account list and management features coming soon.</p>
             </div>
           </div>
         </div>

@@ -2,8 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { ChefHat, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
-const DEMO_EMAIL = 'demo@recipe.com';
-const DEMO_PASSWORD = 'password123';
 const ROLES = ['Manager', 'Chef', 'Cook'];
 
 export default function LoginPage({ onSuccess }) {
@@ -183,33 +181,7 @@ export default function LoginPage({ onSuccess }) {
             </div>
           </div>
 
-          <div className="mt-8 border-t border-slate-200 pt-6">
-            <p className="text-center text-sm font-semibold text-slate-600">Demo Credentials:</p>
-            <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-slate-600">Email</span>
-                <span className="font-mono">{DEMO_EMAIL}</span>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <span className="font-medium text-slate-600">Password</span>
-                <span className="font-mono">{DEMO_PASSWORD}</span>
-              </div>
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  className="text-sm font-semibold text-orange-600 transition hover:text-orange-700"
-                  onClick={() => {
-                    setEmail(DEMO_EMAIL);
-                    setPassword(DEMO_PASSWORD);
-                    setRole('Manager');
-                    setError('');
-                  }}
-                >
-                  Use demo
-                </button>
-              </div>
-            </div>
-          </div>
+          {/* Demo credentials removed */}
         </div>
       </div>
     </div>
