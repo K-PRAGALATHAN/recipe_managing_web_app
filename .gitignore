@@ -6,6 +6,9 @@
 **/build/
 frontend/.vite/
 
+# Runtime data (local dev)
+backend/data/
+
 # Env files
 **/.env
 **/.env.*

@@ -7,8 +7,9 @@ import SettingsPage from './SettingsPage.jsx';
 
 const NAV_ITEMS = [
   { id: 'dashboard', roles: ['Manager'] },
+  { id: 'cook', roles: ['Manager'] },
   { id: 'recipes', roles: ['Manager', 'Chef', 'Cook'] },
-  { id: 'inventory', roles: ['Manager', 'Chef'] },
+  { id: 'inventory', roles: ['Manager'] },
   { id: 'settings', roles: ['Manager'] },
 ];
 
@@ -32,16 +33,16 @@ export default function App({ session, onLogout }) {
   }, [allowedNav, defaultNav]);
 
   const renderContent = () => {
-    if (activeNav === 'settings') return <SettingsPage />;
+    if (activeNav === 'settings') return <SettingsPage session={session} />;
 
     if (userRole === 'Manager') {
+      if (activeNav === 'cook') return <CookPortal />;
       if (activeNav === 'inventory') return <ManagerDashboard initialTab="inventory" title="Inventory" />;
       if (activeNav === 'recipes') return <ChefPortal />;
       return <ManagerDashboard initialTab="overview" title="Manager" />;
     }
 
     if (userRole === 'Chef') {
-      if (activeNav === 'inventory') return <ManagerDashboard initialTab="inventory" title="Inventory" />;
       return <ChefPortal />;
     }
 

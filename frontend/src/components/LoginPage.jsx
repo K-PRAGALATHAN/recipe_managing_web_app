@@ -1,100 +1,84 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChefHat, Eye, EyeOff, Lock, Mail } from 'lucide-react';
-import { supabase } from '../utils/supabaseClient';
+import { ChefHat, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { login } from '../utils/authApi';
 import { setRememberPreference } from '../utils/authStorage';
-import { setRolePreference } from '../utils/authPreferences';
-import { isLocalDemoEnabled } from '../utils/demoSession';
+import { supabase } from '../utils/supabaseClient';
 
-const DEMO_EMAIL = 'demo@recipe.com';
-const DEMO_PASSWORD = 'password123';
-const ROLES = ['Manager', 'Chef', 'Cook'];
+function GoogleIcon(props) {
+  return (
+    <svg viewBox="0 0 48 48" {...props}>
+      <path
+        fill="#FFC107"
+        d="M43.611 20.083H42V20H24v8h11.303C33.656 32.659 29.161 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.954 4 4 12.954 4 24s8.954 20 20 20 20-8.954 20-20c0-1.341-.138-2.651-.389-3.917z"
+      />
+      <path
+        fill="#FF3D00"
+        d="M6.306 14.691l6.571 4.819C14.655 16.108 18.96 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"
+      />
+      <path
+        fill="#4CAF50"
+        d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.141 0-9.624-3.317-11.28-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
+      />
+      <path
+        fill="#1976D2"
+        d="M43.611 20.083H42V20H24v8h11.303c-.792 2.238-2.231 4.166-4.084 5.57l.003-.002 6.19 5.238C36.973 39.205 44 34 44 24c0-1.341-.138-2.651-.389-3.917z"
+      />
+    </svg>
+  );
+}
 
 export default function LoginPage({ onSuccess, initialError = '' }) {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('Cook');
   const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const supabaseConfigured = Boolean(supabase);
-  const localDemoEnabled = isLocalDemoEnabled();
-  const authAvailable = supabaseConfigured || localDemoEnabled;
 
   useEffect(() => {
     if (initialError) setError(initialError);
   }, [initialError]);
 
-  const canSubmit = useMemo(() => email.trim() && password.trim() && role, [email, password, role]);
-
-  const formatAuthError = (err) => {
-    const rawMessage = (err?.message || '').toLowerCase();
-
-    if (rawMessage.includes('invalid login credentials')) return 'Invalid email or password.';
-    if (rawMessage.includes('email not confirmed')) return 'Please confirm your email before signing in.';
-    if (rawMessage.includes('too many requests')) return 'Too many attempts. Please try again later.';
-    if (rawMessage.includes('failed to fetch') || rawMessage.includes('networkerror')) {
-      return 'Unable to reach the authentication service. Please try again.';
-    }
-
-    return "We couldn't sign you in. Please try again.";
-  };
+  const canSubmit = useMemo(() => Boolean(username.trim() && password.trim()), [username, password]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
 
-    if (!supabaseConfigured) {
-      if (!localDemoEnabled) {
-        setError('Sign in is temporarily unavailable. Please try again later.');
-        if (import.meta.env.DEV) {
-          console.warn('Missing Supabase configuration: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY');
-        }
-        return;
-      }
-
-      if (email.trim().toLowerCase() !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
-        setError('Use the demo credentials shown below.');
-        return;
-      }
-
-      setRememberPreference(remember);
-      setRolePreference(role);
-      onSuccess?.({ email: DEMO_EMAIL, role, remember, demo: true });
-      return;
-    }
-
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter your email and password.');
-      return;
-    }
-
-    if (!ROLES.includes(role)) {
-      setError('Please choose a role.');
+    if (!username.trim() || !password.trim()) {
+      setError('Please enter your username and password.');
       return;
     }
 
     try {
       setRememberPreference(remember);
-      setRolePreference(role);
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
-      if (error) throw error;
-
-      try {
-        await supabase.auth.updateUser({ data: { role } });
-      } catch {
-        // ignore (role metadata is best-effort)
-      }
-
-      // success: inform parent (App persists session and routes based on role)
-      onSuccess?.({ email: email.trim(), role, remember, user: data.user });
+      const { token, user } = await login({ username: username.trim(), password });
+      onSuccess?.({ token, user, remember });
     } catch (err) {
       if (import.meta.env.DEV) console.error(err);
-      setError(formatAuthError(err));
+      if (String(err?.message) === 'invalid_credentials') setError('Invalid username or password.');
+      else if (String(err?.message) === 'server_missing_auth_secret')
+        setError('Server is missing AUTH_SECRET. Configure backend env and try again.');
+      else setError("We couldn't sign you in. Please try again.");
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    if (!supabase) {
+      setError('Google sign-in is not configured.');
+      return;
+    }
+
+    try {
+      const redirectTo = `${window.location.origin}/oauth/callback`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      });
+      if (error) throw error;
+    } catch (err) {
+      if (import.meta.env.DEV) console.error(err);
+      setError("We couldn't start Google sign-in. Please try again.");
     }
   };
 
@@ -105,46 +89,30 @@ export default function LoginPage({ onSuccess, initialError = '' }) {
           <ChefHat className="h-9 w-9 text-orange-500" aria-hidden="true" />
         </div>
 
-        <h1 className="text-center text-4xl font-extrabold tracking-tight text-white">
-          Recipe Manager
-        </h1>
+        <h1 className="text-center text-4xl font-extrabold tracking-tight text-white">Recipe Manager</h1>
         <p className="mt-2 text-center text-white/90">Sign in to your account</p>
 
         <div className="mt-10 w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl shadow-orange-900/25">
-          {!supabaseConfigured ? (
-            <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <div className="flex gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" aria-hidden="true" />
-                <div>
-                  <p className="font-semibold text-slate-800">
-                    {localDemoEnabled ? 'Supabase not configured' : 'Authentication unavailable'}
-                  </p>
-                  <p className="mt-1 text-slate-600">
-                    {localDemoEnabled
-                      ? 'Local demo mode is enabled. Use the demo credentials below to continue.'
-                      : 'Sign in is temporarily unavailable. Please try again later.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={!supabase}
+            className="mb-6 flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <GoogleIcon className="h-5 w-5" aria-hidden="true" focusable="false" />
+            Continue with Google
+          </button>
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Email Address</label>
+              <label className="text-sm font-semibold text-slate-700">Username</label>
               <div className="relative">
-                <Mail
-                  className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-                  aria-hidden="true"
-                />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  disabled={!authAvailable}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-3 text-slate-900 outline-none ring-orange-300 transition focus:border-orange-400 focus:ring-4"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-slate-900 outline-none ring-orange-300 transition focus:border-orange-400 focus:ring-4"
                 />
               </div>
             </div>
@@ -152,60 +120,23 @@ export default function LoginPage({ onSuccess, initialError = '' }) {
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Password</label>
               <div className="relative">
-                <Lock
-                  className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-                  aria-hidden="true"
-                />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
                   placeholder="Enter your password"
                   value={password}
-                  disabled={!authAvailable}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 text-slate-900 outline-none ring-orange-300 transition focus:border-orange-400 focus:ring-4"
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-12 text-slate-900 outline-none ring-orange-300 transition focus:border-orange-400 focus:ring-4"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  disabled={!authAvailable}
                   className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" aria-hidden="true" />
-                  ) : (
-                    <Eye className="h-5 w-5" aria-hidden="true" />
-                  )}
+                  {showPassword ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
                 </button>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Role</label>
-              <div className="relative">
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  disabled={!authAvailable}
-                  className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-10 text-slate-900 outline-none ring-orange-300 transition focus:border-orange-400 focus:ring-4"
-                >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-                <span
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  aria-hidden="true"
-                >
-                  ▾
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Manager can view Chef + Cook, Chef can view Cook.
-              </p>
             </div>
 
             <div className="flex items-center justify-between gap-4">
@@ -214,7 +145,6 @@ export default function LoginPage({ onSuccess, initialError = '' }) {
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  disabled={!authAvailable}
                   className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-400"
                 />
                 Remember me
@@ -235,74 +165,12 @@ export default function LoginPage({ onSuccess, initialError = '' }) {
 
             <button
               type="submit"
-              disabled={!authAvailable || !canSubmit}
+              disabled={!canSubmit}
               className="h-12 w-full rounded-xl bg-gradient-to-r from-orange-600 to-amber-500 font-semibold text-white shadow-lg shadow-orange-600/25 transition hover:from-orange-700 hover:to-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Sign In
             </button>
           </form>
-
-          <div className="mt-6 flex flex-col items-center gap-3">
-            <p className="text-sm text-slate-600">Or continue with</p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  // start OAuth redirect with Supabase (redirects back to app)
-                  if (!supabaseConfigured) {
-                    setError('Sign in is temporarily unavailable. Please try again later.');
-                    if (import.meta.env.DEV) {
-                      console.warn('Missing Supabase configuration: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY');
-                    }
-                    return;
-                  }
-                  setError('');
-                  setRememberPreference(remember);
-                  setRolePreference(role);
-
-                  const redirectTo = import.meta.env.VITE_OAUTH_REDIRECT_URL || window.location.origin;
-                  supabase.auth.signInWithOAuth({
-                    provider: 'google',
-                    options: { redirectTo },
-                  });
-                  onSuccess?.({ email: email.trim(), role, remember, oauthStarted: true });
-                }}
-                disabled={!supabaseConfigured}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Sign in with Google
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-8 border-t border-slate-200 pt-6">
-            <p className="text-center text-sm font-semibold text-slate-600">Demo Credentials:</p>
-            <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-slate-600">Email</span>
-                <span className="font-mono">{DEMO_EMAIL}</span>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <span className="font-medium text-slate-600">Password</span>
-                <span className="font-mono">{DEMO_PASSWORD}</span>
-              </div>
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  className="text-sm font-semibold text-orange-600 transition hover:text-orange-700"
-                  onClick={() => {
-                    setEmail(DEMO_EMAIL);
-                    setPassword(DEMO_PASSWORD);
-                    setRole('Manager');
-                    setError('');
-                  }}
-                  disabled={!authAvailable}
-                >
-                  Use demo
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

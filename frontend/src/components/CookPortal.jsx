@@ -1,36 +1,119 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ListTodo, UtensilsCrossed } from 'lucide-react';
+import { getCookMenu, getCookStatus, setCookStatus } from '../utils/cookApi';
 
-const TODAY_MENU = [
+const DEFAULT_MENU = [
   { id: 'm1', name: 'Grilled Salmon', minutes: 25 },
   { id: 'm2', name: 'Caesar Salad', minutes: 15 },
   { id: 'm3', name: 'Pasta Carbonara', minutes: 30 },
   { id: 'm4', name: 'Beef Wellington', minutes: 45 },
 ];
 
+const toIdSet = (maybeIds) => new Set(Array.isArray(maybeIds) ? maybeIds.map(String) : []);
+const setToArray = (set) => Array.from(set);
+
 export default function CookPortal() {
-  const [selectedMenuIds, setSelectedMenuIds] = useState(() => new Set(['m1', 'm2']));
-  const [doneIds, setDoneIds] = useState(() => new Set(['m2']));
+  const [date, setDate] = useState(null);
+  const [menuItems, setMenuItems] = useState(DEFAULT_MENU);
+  const [selectedMenuIds, setSelectedMenuIds] = useState(() => new Set());
+  const [doneIds, setDoneIds] = useState(() => new Set());
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const didHydrateRef = useRef(false);
 
   const selectedMenu = useMemo(
-    () => TODAY_MENU.filter((item) => selectedMenuIds.has(item.id)),
-    [selectedMenuIds]
+    () => menuItems.filter((item) => selectedMenuIds.has(item.id)),
+    [menuItems, selectedMenuIds]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setIsLoading(true);
+        setLoadError(null);
+
+        const [menu, status] = await Promise.all([getCookMenu(), getCookStatus()]);
+        if (cancelled) return;
+
+        const items = Array.isArray(menu?.items) ? menu.items : DEFAULT_MENU;
+        const menuIdSet = new Set(items.map((i) => String(i.id)));
+
+        const selected = toIdSet(status?.selectedMenuIds);
+        const done = toIdSet(status?.doneIds);
+
+        const normalizedSelected = new Set(Array.from(selected).filter((id) => menuIdSet.has(id)));
+        const normalizedDone = new Set(Array.from(done).filter((id) => normalizedSelected.has(id)));
+
+        setMenuItems(items);
+        setDate(typeof status?.date === 'string' ? status.date : null);
+        setSelectedMenuIds(normalizedSelected);
+        setDoneIds(normalizedDone);
+      } catch (err) {
+        if (cancelled) return;
+        setLoadError(err?.message ?? 'Failed to load cook portal data.');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (didHydrateRef.current === false) {
+      didHydrateRef.current = true;
+      return;
+    }
+    if (!date) return;
+
+    const handle = setTimeout(async () => {
+      try {
+        setIsSaving(true);
+        setSaveError(null);
+        await setCookStatus({
+          date,
+          selectedMenuIds: setToArray(selectedMenuIds),
+          doneIds: setToArray(doneIds),
+        });
+      } catch (err) {
+        setSaveError(err?.message ?? 'Failed to save.');
+      } finally {
+        setIsSaving(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [date, selectedMenuIds, doneIds, isLoading]);
+
   const toggleSelected = (id) => {
+    const nextId = String(id);
     setSelectedMenuIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(nextId)) next.delete(nextId);
+      else next.add(nextId);
+      return next;
+    });
+    setDoneIds((prev) => {
+      const next = new Set(prev);
+      next.delete(nextId);
       return next;
     });
   };
 
   const toggleDone = (id) => {
+    const nextId = String(id);
     setDoneIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(nextId)) next.delete(nextId);
+      else next.add(nextId);
       return next;
     });
   };
@@ -41,6 +124,12 @@ export default function CookPortal() {
 
   return (
     <div className="p-6 lg:p-10">
+      <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+        <span>{date ? `Date: ${date}` : 'Date: —'}</span>
+        {isSaving ? <span className="text-orange-300">Saving…</span> : null}
+        {saveError ? <span className="text-rose-300">Save failed: {saveError}</span> : null}
+        {loadError ? <span className="text-rose-300">Load failed: {loadError}</span> : null}
+      </div>
       <div className="flex items-center gap-3">
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-orange-600/15 ring-1 ring-orange-500/20">
           <UtensilsCrossed className="h-6 w-6 text-orange-400" aria-hidden="true" />
@@ -77,7 +166,7 @@ export default function CookPortal() {
           <p className="mt-1 text-xs text-zinc-500">Choose which recipes you’re preparing.</p>
 
           <div className="mt-4 grid gap-2">
-            {TODAY_MENU.map((item) => {
+            {menuItems.map((item) => {
               const checked = selectedMenuIds.has(item.id);
               return (
                 <label
@@ -92,6 +181,7 @@ export default function CookPortal() {
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggleSelected(item.id)}
+                    disabled={isLoading}
                     className="h-4 w-4 rounded border-zinc-700 text-orange-500 focus:ring-orange-400"
                   />
                 </label>
@@ -125,13 +215,14 @@ export default function CookPortal() {
                       type="checkbox"
                       checked={done}
                       onChange={() => toggleDone(item.id)}
+                      disabled={isLoading}
                       className="h-4 w-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-400"
                     />
                   </label>
                 );
               })
             ) : (
-              <p className="text-sm text-zinc-400">Select at least one menu item to start.</p>
+              <p className="text-sm text-zinc-400">{isLoading ? 'Loading…' : 'Select at least one menu item to start.'}</p>
             )}
           </div>
         </div>
@@ -139,4 +230,3 @@ export default function CookPortal() {
     </div>
   );
 }
-

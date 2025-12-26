@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { getSessionToken } from './authSession';
 
 const resolveUrl = (pathOrUrl) => {
   if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
@@ -9,9 +9,7 @@ const resolveUrl = (pathOrUrl) => {
 };
 
 export const getAccessToken = async () => {
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  return getSessionToken();
 };
 
 export const apiFetch = async (pathOrUrl, options = {}) => {
@@ -23,4 +21,3 @@ export const apiFetch = async (pathOrUrl, options = {}) => {
 
   return fetch(url, { ...options, headers });
 };
-

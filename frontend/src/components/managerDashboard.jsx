@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BarChart3, Building2, Calculator, CheckCircle2, Download, Package, Plus, Trash2, XCircle } from 'lucide-react';
+import { AlertTriangle, BarChart3, Building2, Calculator, CheckCircle2, Download, KeyRound, Package, Plus, Trash2, UserPlus, Users, XCircle } from 'lucide-react';
+import { createUser } from '../utils/adminApi';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(
@@ -26,6 +27,15 @@ const downloadCsv = (filename, rows) => {
   a.remove();
   URL.revokeObjectURL(url);
 };
+
+const randomPassword = (length = 16) => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*_-+=';
+  const bytes = new Uint32Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
+};
+
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 const INITIAL_VENDORS = [
   { id: 'v1', name: 'Fresh Farm Produce', contact: 'freshfarm@example.com', leadTimeDays: 2, active: true },
@@ -55,6 +65,10 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
   const [marginInput, setMarginInput] = useState({ cost: 12.5, price: 24 });
   const [wasteLog, setWasteLog] = useState([]);
   const [wasteDraft, setWasteDraft] = useState({ ingredientId: INITIAL_INGREDIENTS[0]?.id ?? '', qty: 0.5, reason: 'Prep waste' });
+  const [staffDraft, setStaffDraft] = useState({ email: '', password: '', role: 'Cook' });
+  const [staffStatus, setStaffStatus] = useState({ kind: '', message: '' });
+  const [creatingStaff, setCreatingStaff] = useState(false);
+  const [createdStaff, setCreatedStaff] = useState([]);
 
   useEffect(() => {
     setTab(initialTab);
@@ -93,6 +107,7 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
     { id: 'overview', label: 'Overview', icon: <BarChart3 size={18} /> },
     { id: 'vendors', label: 'Vendors', icon: <Building2 size={18} /> },
     { id: 'inventory', label: 'Inventory', icon: <Package size={18} /> },
+    { id: 'staff', label: 'Staff', icon: <Users size={18} /> },
     { id: 'costing', label: 'Costing', icon: <Calculator size={18} /> },
     { id: 'reports', label: 'Reports', icon: <Download size={18} /> },
   ];
@@ -151,10 +166,60 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
     const qty = Number(wasteDraft.qty);
     if (!wasteDraft.ingredientId || !Number.isFinite(qty) || qty <= 0) return;
     setWasteLog((prev) => [
-      { id: `w${Date.now()}`, at: new Date().toISOString(), ingredientId: wasteDraft.ingredientId, qty, reason: wasteDraft.reason.trim() || '—' },
+      { id: `w${Date.now()}`, at: new Date().toISOString(), ingredientId: wasteDraft.ingredientId, qty, reason: wasteDraft.reason.trim() || '-' },
       ...prev,
     ]);
     setWasteDraft((prev) => ({ ...prev, qty: 0.5 }));
+  };
+
+  const createStaffUser = async () => {
+    setStaffStatus({ kind: '', message: '' });
+
+    const email = staffDraft.email.trim();
+    const password = staffDraft.password;
+    const role = staffDraft.role;
+
+    if (!email || !isValidEmail(email)) {
+      setStaffStatus({ kind: 'error', message: 'Enter a valid email.' });
+      return;
+    }
+
+    if (!password || password.length < 8) {
+      setStaffStatus({ kind: 'error', message: 'Password must be at least 8 characters.' });
+      return;
+    }
+
+    if (!['Cook', 'Chef'].includes(role)) {
+      setStaffStatus({ kind: 'error', message: 'Role must be Cook or Chef.' });
+      return;
+    }
+
+    try {
+      setCreatingStaff(true);
+      const normalizedRole = role === 'Chef' ? 'chef' : 'cook';
+      const response = await createUser({ username: email, password, role: normalizedRole });
+      const created = response?.user;
+
+      setCreatedStaff((prev) => [
+        { id: created?.supabaseUserId ?? created?.id ?? `local-${Date.now()}`, email, role, at: new Date().toISOString() },
+        ...prev,
+      ]);
+      setStaffStatus({
+        kind: 'success',
+        message: created?.supabaseUserId
+          ? 'User created in database and Supabase Auth.'
+          : 'User created in database. Supabase Auth provisioning is not configured on the backend.',
+      });
+      setStaffDraft((prev) => ({ ...prev, email: '', password: '' }));
+    } catch (err) {
+      const message = String(err?.message || 'Unable to create user.');
+      if (message === 'username_taken') setStaffStatus({ kind: 'error', message: 'This email is already used as a username.' });
+      else if (message === 'supabase_email_taken') setStaffStatus({ kind: 'error', message: 'This email already exists in Supabase Auth.' });
+      else if (message === 'invalid_role') setStaffStatus({ kind: 'error', message: 'Role must be Cook or Chef.' });
+      else setStaffStatus({ kind: 'error', message });
+    } finally {
+      setCreatingStaff(false);
+    }
   };
 
   return (
@@ -516,6 +581,128 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                 })
               ) : (
                 <p className="text-sm text-zinc-400">No waste entries yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === 'staff' ? (
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <div className={card}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-white">Add Cook / Chef</p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Creates a Supabase Auth user via client-side sign up (no backend required).
+                </p>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300">
+                Roles: <span className="font-semibold text-white">Cook</span>, <span className="font-semibold text-white">Chef</span>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Email</label>
+                <input
+                  className={input}
+                  value={staffDraft.email}
+                  onChange={(e) => setStaffDraft((p) => ({ ...p, email: e.target.value }))}
+                  placeholder="cook@example.com"
+                  autoComplete="off"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Role</label>
+                <select className={input} value={staffDraft.role} onChange={(e) => setStaffDraft((p) => ({ ...p, role: e.target.value }))}>
+                  <option value="Cook">Cook</option>
+                  <option value="Chef">Chef</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Temporary Password</label>
+                <div className="flex gap-2">
+                  <input
+                    className={input}
+                    value={staffDraft.password}
+                    onChange={(e) => setStaffDraft((p) => ({ ...p, password: e.target.value }))}
+                    placeholder="Min 8 characters"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className={buttonSecondary}
+                    onClick={() => setStaffDraft((p) => ({ ...p, password: randomPassword() }))}
+                    title="Generate password"
+                  >
+                    <KeyRound size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="sm:col-span-2 flex flex-wrap gap-2">
+                <button type="button" className={button} onClick={createStaffUser} disabled={creatingStaff}>
+                  <UserPlus size={16} />
+                  {creatingStaff ? 'Creating...' : 'Create user'}
+                </button>
+                <button
+                  type="button"
+                  className={buttonSecondary}
+                  disabled={!staffDraft.password}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(staffDraft.password || '');
+                      setStaffStatus({ kind: 'success', message: 'Password copied to clipboard.' });
+                    } catch {
+                      setStaffStatus({ kind: 'error', message: 'Unable to copy password (clipboard blocked).' });
+                    }
+                  }}
+                >
+                  Copy password
+                </button>
+              </div>
+            </div>
+
+            {staffStatus.message ? (
+              <div
+                className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+                  staffStatus.kind === 'success'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                    : 'border-orange-500/30 bg-orange-500/10 text-orange-200'
+                }`}
+              >
+                {staffStatus.message}
+              </div>
+            ) : null}
+
+            <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-xs text-zinc-400">
+              Note: This creates staff via the backend Admin API. Supabase Auth provisioning runs only if the backend is configured with
+              <span className="font-mono">SUPABASE_URL</span> and <span className="font-mono">SUPABASE_SERVICE_ROLE_KEY</span>.
+            </div>
+          </div>
+
+          <div className={card}>
+            <p className="text-sm font-bold text-white">Recently Added (this session)</p>
+            <p className="mt-1 text-xs text-zinc-500">Stored in the backend database; this list shows what you created in this session.</p>
+
+            <div className="mt-4 space-y-2">
+              {createdStaff.length ? (
+                createdStaff.slice(0, 8).map((u) => (
+                  <div key={u.id} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{u.email}</p>
+                      <p className="text-xs text-zinc-500">{u.role}  {new Date(u.at).toLocaleString()}</p>
+                    </div>
+                    <span className="inline-flex items-center rounded-full bg-orange-500/10 px-2 py-1 text-xs font-bold text-orange-300">
+                      {u.role}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-zinc-400">No staff created yet.</p>
               )}
             </div>
           </div>

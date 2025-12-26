@@ -18,8 +18,9 @@ const Layout = ({ children, userRole = 'Chef', userEmail, onLogout, activeNav = 
 
   const navigation = [
     { id: 'dashboard', name: 'Dashboard', icon: <LayoutDashboard size={20} />, roles: ['Manager'] },
+    { id: 'cook', name: 'Cook', icon: <ClipboardList size={20} />, roles: ['Manager'] },
     { id: 'recipes', name: 'Recipes', icon: <UtensilsCrossed size={20} />, roles: ['Manager', 'Chef', 'Cook'] },
-    { id: 'inventory', name: 'Inventory', icon: <ClipboardList size={20} />, roles: ['Manager', 'Chef'] },
+    { id: 'inventory', name: 'Inventory', icon: <ClipboardList size={20} />, roles: ['Manager'] },
     { id: 'settings', name: 'Settings', icon: <Settings size={20} />, roles: ['Manager'] },
   ];
 

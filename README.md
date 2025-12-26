@@ -19,4 +19,9 @@ i need login portal once i run the website
 then in login page itself i should specifies the role 
 based on role it should direct me to the specific portal 
 but manager can see what is happening in chef and cook portal 
-and chef can see cook portal 
+and chef can see cook portal
+
+
+for Backend : node.js and express.js
+for database : refshift, bigquery optional 
+then use standard postgresql
