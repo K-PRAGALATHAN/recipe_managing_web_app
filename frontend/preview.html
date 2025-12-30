@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Manager - Preview</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f97316 0%, #fb923c 50%, #fbbf24 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 3rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+        }
+        h1 {
+            color: #ea580c;
+            margin-bottom: 1rem;
+        }
+        p {
+            color: #64748b;
+            margin-bottom: 2rem;
+        }
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #ea580c, #f59e0b);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .status {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #f1f5f9;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍳 Recipe Manager</h1>
+        <p>Your application is running at:</p>
+        <a href="http://localhost:5173" class="btn" target="_blank">Open Application →</a>
+        <div class="status">
+            <strong>Status:</strong> <span id="status">Checking...</span>
+        </div>
+    </div>
+    <script>
+        // Check if server is running
+        fetch('http://localhost:5173')
+            .then(() => {
+                document.getElementById('status').textContent = '✅ Server is running!';
+                document.getElementById('status').style.color = '#059669';
+            })
+            .catch(() => {
+                document.getElementById('status').textContent = '⏳ Starting server...';
+                document.getElementById('status').style.color = '#f59e0b';
+            });
+    </script>
+</body>
+</html>
+

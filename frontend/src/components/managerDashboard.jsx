@@ -1,10 +1,13 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useMemo, useState, useEffect } from 'react';
 import { AlertTriangle, BarChart3, Building2, Calculator, CheckCircle2, Download, Package, Plus, Settings, Trash2, XCircle } from 'lucide-react';
+import { supabase } from '../utils/supabaseClient';
 
-const formatCurrency = (value) =>
-  new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(
-    Number.isFinite(value) ? value : 0
+const formatCurrency = (value) => {
+  const num = Number(value);
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(
+    Number.isFinite(num) ? num : 0
   );
+};
 
 const toCsv = (rows) => {
   const escapeCell = (cell) => {
@@ -27,47 +30,51 @@ const downloadCsv = (filename, rows) => {
   URL.revokeObjectURL(url);
 };
 
-const INITIAL_VENDORS = [
-  { id: 'v1', name: 'Fresh Farm Produce', contact: 'freshfarm@example.com', leadTimeDays: 2, active: true },
-  { id: 'v2', name: 'Ocean Seafood Co', contact: 'oceanseafood@example.com', leadTimeDays: 1, active: true },
-  { id: 'v3', name: 'Metro Meats', contact: 'metromeats@example.com', leadTimeDays: 3, active: true },
-];
-
-const INITIAL_INGREDIENTS = [
-  { id: 'i1', name: 'Chicken Breast', unit: 'kg', unitCost: 7.5, onHand: 6, parLevel: 10, vendorId: 'v3' },
-  { id: 'i2', name: 'Salmon Fillet', unit: 'kg', unitCost: 18.9, onHand: 2, parLevel: 4, vendorId: 'v2' },
-  { id: 'i3', name: 'Roma Tomatoes', unit: 'kg', unitCost: 2.2, onHand: 12, parLevel: 8, vendorId: 'v1' },
-];
-
 export default function ManagerDashboard() {
   const [tab, setTab] = useState('overview');
-  const [vendors, setVendors] = useState(INITIAL_VENDORS);
-  const [ingredients, setIngredients] = useState(INITIAL_INGREDIENTS);
+  const [vendors, setVendors] = useState([]);
+  const [ingredients, setIngredients] = useState([]);
   const [newVendor, setNewVendor] = useState({ name: '', contact: '', leadTimeDays: 2 });
   const [newIngredient, setNewIngredient] = useState({
     name: '',
     unit: 'kg',
-    unitCost: 0,
-    onHand: 0,
-    parLevel: 0,
-    vendorId: INITIAL_VENDORS[0]?.id ?? '',
+    unitCost: '',  // Empty string for controlled input (allows user to clear/type freely)
+    onHand: '',    // Empty string for controlled input (allows user to clear/type freely)
+    parLevel: '',  // Empty string for controlled input (allows user to clear/type freely)
+    vendorId: '',
   });
   const [marginInput, setMarginInput] = useState({ cost: 12.5, price: 24 });
   const [wasteLog, setWasteLog] = useState([]);
-  const [wasteDraft, setWasteDraft] = useState({ ingredientId: INITIAL_INGREDIENTS[0]?.id ?? '', qty: 0.5, reason: 'Prep waste' });
+  const [wasteDraft, setWasteDraft] = useState({ ingredientId: '', qty: 0.5, reason: 'Prep waste' });
   const [newAccount, setNewAccount] = useState({ email: '', role: 'chef', cuisine: '' });
 
   const fetchIngredients = async () => {
     try {
+      // Select all columns - database uses snake_case
       const { data, error } = await supabase.from('ingredients').select('*');
       if (error) {
-        console.error('Failed to load ingredients from Supabase', error);
+        console.error('❌ Failed to load ingredients from Supabase', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         return [];
       }
-      setIngredients(data ?? []);
-      return data ?? [];
+
+      // Normalize: Convert snake_case from database (on_hand, par_level, unit_cost, vendor_id) to camelCase for UI
+      const normalizedData = (data ?? []).map(item => ({
+        ...item,
+        onHand: Number(item.on_hand ?? 0),
+        parLevel: Number(item.par_level ?? 0),
+        unitCost: Number(item.unit_cost ?? 0),
+        vendorId: item.vendor_id ?? null,
+      }));
+      setIngredients(normalizedData);
+      return normalizedData;
     } catch (err) {
-      console.error('Error fetching ingredients', err);
+      console.error('❌ Error fetching ingredients - Exception:', err);
       return [];
     }
   };
@@ -79,8 +86,13 @@ export default function ManagerDashboard() {
         console.error('Failed to load vendors from Supabase', error);
         return [];
       }
-      setVendors(data ?? []);
-      return data ?? [];
+      // Normalize snake_case to camelCase
+      const normalized = (data ?? []).map(v => ({
+        ...v,
+        leadTimeDays: v.lead_time_days
+      }));
+      setVendors(normalized);
+      return normalized;
     } catch (err) {
       console.error('Error fetching vendors', err);
       return [];
@@ -152,7 +164,7 @@ export default function ManagerDashboard() {
     const payload = {
       name,
       contact: newVendor.contact.trim() || '—',
-      leadTimeDays: Math.max(0, Number(newVendor.leadTimeDays) || 0),
+      lead_time_days: Math.max(0, Number(newVendor.leadTimeDays) || 0),
       active: true,
     };
 
@@ -160,6 +172,7 @@ export default function ManagerDashboard() {
       const { data, error } = await supabase.from('vendors').insert([payload]).select();
       if (error) {
         console.error('Failed to insert vendor', error);
+        console.error('Vendor payload:', payload);
         return;
       }
       await fetchVendors();
@@ -176,9 +189,9 @@ export default function ManagerDashboard() {
         console.error('Failed to delete vendor', error);
         return;
       }
-      // clear vendorId from any ingredients that referenced this vendor
-      const { error: ingErr } = await supabase.from('ingredients').update({ vendorId: null }).eq('vendorId', vendorId);
-      if (ingErr) console.error('Failed to clear vendorId on ingredients', ingErr);
+      // clear vendor_id from any ingredients that referenced this vendor (use snake_case)
+      const { error: ingErr } = await supabase.from('ingredients').update({ vendor_id: null }).eq('vendor_id', vendorId);
+      if (ingErr) console.error('Failed to clear vendor_id on ingredients', ingErr);
       await fetchVendors();
       await fetchIngredients();
     } catch (err) {
@@ -190,31 +203,100 @@ export default function ManagerDashboard() {
     const name = newIngredient.name.trim();
     if (!name) return;
 
+    // Explicitly map camelCase UI state to snake_case database columns
+    // Use Number() for type safety on all numeric fields
+    // DO NOT include 'id' - let Supabase generate the UUID
     const payload = {
-      name,
+      name: newIngredient.name.trim(),
       unit: newIngredient.unit.trim() || 'unit',
-      unitCost: Number(newIngredient.unitCost) || 0,
-      onHand: Number(newIngredient.onHand) || 0,
-      parLevel: Number(newIngredient.parLevel) || 0,
-      vendorId: newIngredient.vendorId || null,
+      on_hand: Number(newIngredient.onHand) || 0,
+      unit_cost: Number(newIngredient.unitCost) || 0,
+      par_level: Number(newIngredient.parLevel) || 0,
+      vendor_id: newIngredient.vendorId || null,
     };
+
+    console.log('Adding ingredient - UI state (camelCase):', newIngredient);
+    console.log('Adding ingredient - DB payload (snake_case):', payload);
+    console.log('Type checks:', {
+      'on_hand': typeof payload.on_hand,
+      'unit_cost': typeof payload.unit_cost,
+      'par_level': typeof payload.par_level,
+    });
+    console.log('Payload keys (should NOT include id):', Object.keys(payload));
 
     try {
       const { data, error } = await supabase.from('ingredients').insert([payload]).select();
       if (error) {
-        console.error('Failed to insert ingredient', error);
+        console.error('❌ Failed to insert ingredient - Supabase Error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        console.error('Payload that failed:', JSON.stringify(payload, null, 2));
+        alert(`Failed to add ingredient: ${error.message}\n\nIf you see a "schema cache" error, please:\n1. Hard refresh browser (Ctrl+F5 or Cmd+Shift+R)\n2. Clear browser cache\n3. Check console for details`);
         return;
       }
-      // refresh list from DB to ensure UI sync
+      console.log('✅ Ingredient added successfully:', data);
+      // Refresh list from DB to ensure UI sync
       await fetchIngredients();
-      setNewIngredient((prev) => ({ ...prev, name: '', unitCost: 0, onHand: 0, parLevel: 0 }));
+      // Reset form while preserving defaults
+      setNewIngredient({
+        name: '',
+        unit: 'kg',
+        unitCost: '',
+        onHand: '',
+        parLevel: '',
+        vendorId: '',
+      });
     } catch (err) {
-      console.error('Error adding ingredient', err);
+      console.error('❌ Error adding ingredient - Exception:', err);
+      console.error('Exception stack:', err.stack);
+      alert(`Error adding ingredient: ${err.message}. Check console for details.`);
     }
   };
 
-  const updateIngredient = (ingredientId, patch) =>
+  const updateIngredient = async (ingredientId, patch) => {
+    // Convert camelCase (UI) to snake_case (database schema)
+    const dbPatch = {};
+    if ('onHand' in patch) dbPatch.on_hand = Number(patch.onHand) || 0;
+    if ('parLevel' in patch) dbPatch.par_level = Number(patch.parLevel) || 0;
+    if ('unitCost' in patch) dbPatch.unit_cost = Number(patch.unitCost) || 0;
+    if ('vendorId' in patch) dbPatch.vendor_id = patch.vendorId || null;
+    if ('unit' in patch) dbPatch.unit = patch.unit;
+    if ('name' in patch) dbPatch.name = patch.name;
+
+    // Update local state immediately for responsive UI
     setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? { ...i, ...patch } : i)));
+
+    // Persist to database using snake_case
+    try {
+      const { error } = await supabase
+        .from('ingredients')
+        .update(dbPatch)
+        .eq('id', ingredientId);
+
+      if (error) {
+        console.error('❌ Failed to update ingredient - Supabase Error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        console.error('Update payload that failed:', JSON.stringify(dbPatch, null, 2));
+        // Revert local state on error
+        await fetchIngredients();
+      } else {
+        console.log('✅ Ingredient updated successfully');
+      }
+    } catch (err) {
+      console.error('❌ Error updating ingredient - Exception:', err);
+      // Revert local state on error
+      await fetchIngredients();
+    }
+  };
 
   const logWaste = () => {
     const qty = Number(wasteDraft.qty);
@@ -271,11 +353,10 @@ export default function ManagerDashboard() {
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                tab === t.id
-                  ? 'border-orange-500/70 bg-orange-600 text-white'
-                  : 'border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-orange-500/60'
-              }`}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${tab === t.id
+                ? 'border-orange-500/70 bg-orange-600 text-white'
+                : 'border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-orange-500/60'
+                }`}
             >
               {t.icon}
               {t.label}
@@ -321,11 +402,10 @@ export default function ManagerDashboard() {
                     <p className="text-xs text-zinc-500">On hand: {i.onHand} {i.unit} • Par: {i.parLevel} {i.unit}</p>
                   </div>
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${
-                      Number(i.onHand) < Number(i.parLevel)
-                        ? 'bg-orange-500/10 text-orange-400'
-                        : 'bg-emerald-500/10 text-emerald-400'
-                    }`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${Number(i.onHand) < Number(i.parLevel)
+                      ? 'bg-orange-500/10 text-orange-400'
+                      : 'bg-emerald-500/10 text-emerald-400'
+                      }`}
                   >
                     {Number(i.onHand) < Number(i.parLevel) ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
                     {Number(i.onHand) < Number(i.parLevel) ? 'Low' : 'OK'}
@@ -438,31 +518,66 @@ export default function ManagerDashboard() {
             <div className="mt-4 space-y-3">
               <div>
                 <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Name</label>
-                <input className={input} value={newIngredient.name} onChange={(e) => setNewIngredient((p) => ({ ...p, name: e.target.value }))} />
+                <input
+                  className={input}
+                  type="text"
+                  value={newIngredient.name ?? ''}
+                  onChange={(e) => setNewIngredient((p) => ({ ...p, name: e.target.value }))}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Unit</label>
-                  <input className={input} value={newIngredient.unit} onChange={(e) => setNewIngredient((p) => ({ ...p, unit: e.target.value }))} />
+                  <input
+                    className={input}
+                    type="text"
+                    value={newIngredient.unit ?? 'kg'}
+                    onChange={(e) => setNewIngredient((p) => ({ ...p, unit: e.target.value }))}
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Unit Cost</label>
-                  <input className={input} type="number" min="0" step="0.01" value={newIngredient.unitCost} onChange={(e) => setNewIngredient((p) => ({ ...p, unitCost: e.target.value }))} />
+                  <input
+                    className={input}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newIngredient.unitCost ?? ''}
+                    onChange={(e) => setNewIngredient((p) => ({ ...p, unitCost: e.target.value }))}
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">On Hand</label>
-                  <input className={input} type="number" min="0" step="0.1" value={newIngredient.onHand} onChange={(e) => setNewIngredient((p) => ({ ...p, onHand: e.target.value }))} />
+                  <input
+                    className={input}
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={newIngredient.onHand ?? ''}
+                    onChange={(e) => setNewIngredient((p) => ({ ...p, onHand: e.target.value }))}
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Par Level</label>
-                  <input className={input} type="number" min="0" step="0.1" value={newIngredient.parLevel} onChange={(e) => setNewIngredient((p) => ({ ...p, parLevel: e.target.value }))} />
+                  <input
+                    className={input}
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={newIngredient.parLevel ?? ''}
+                    onChange={(e) => setNewIngredient((p) => ({ ...p, parLevel: e.target.value }))}
+                  />
                 </div>
               </div>
               <div>
                 <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Vendor</label>
-                <select className={input} value={newIngredient.vendorId} onChange={(e) => setNewIngredient((p) => ({ ...p, vendorId: e.target.value }))}>
+                <select
+                  className={input}
+                  value={newIngredient.vendorId ?? ''}
+                  onChange={(e) => setNewIngredient((p) => ({ ...p, vendorId: e.target.value }))}
+                >
                   <option value="">—</option>
                   {vendors.map((v) => (
                     <option key={v.id} value={v.id}>{v.name}</option>
@@ -499,7 +614,30 @@ export default function ManagerDashboard() {
                       <div className="flex flex-wrap items-center gap-2">
                         <button type="button" className={buttonSecondary} onClick={() => updateIngredient(i.id, { onHand: Math.max(0, Number(i.onHand) - 1) })}>−1</button>
                         <button type="button" className={buttonSecondary} onClick={() => updateIngredient(i.id, { onHand: Number(i.onHand) + 1 })}>+1</button>
-                        <button type="button" className={buttonSecondary} onClick={() => setIngredients((prev) => prev.filter((x) => x.id !== i.id))}>
+                        <button
+                          type="button"
+                          className={buttonSecondary}
+                          onClick={async () => {
+                            if (window.confirm(`Are you sure you want to delete ${i.name}?`)) {
+                              try {
+                                const { error } = await supabase
+                                  .from('ingredients')
+                                  .delete()
+                                  .eq('id', i.id);
+                                if (error) {
+                                  console.error('❌ Failed to delete ingredient:', error);
+                                  alert(`Failed to delete ingredient: ${error.message}`);
+                                } else {
+                                  setIngredients((prev) => prev.filter((x) => x.id !== i.id));
+                                  console.log('✅ Ingredient deleted successfully');
+                                }
+                              } catch (err) {
+                                console.error('❌ Error deleting ingredient:', err);
+                                alert(`Error deleting ingredient: ${err.message}`);
+                              }
+                            }
+                          }}
+                        >
                           <Trash2 size={16} />
                           Remove
                         </button>
