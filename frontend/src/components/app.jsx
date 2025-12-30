@@ -7,8 +7,8 @@ import SettingsPage from './SettingsPage.jsx';
 
 const NAV_ITEMS = [
   { id: 'dashboard', roles: ['Manager'] },
-  { id: 'cook', roles: ['Manager'] },
-  { id: 'recipes', roles: ['Manager', 'Chef', 'Cook'] },
+  { id: 'cook', roles: ['Manager', 'Chef', 'Cook'] },
+  { id: 'recipes', roles: ['Manager', 'Chef'] },
   { id: 'inventory', roles: ['Manager'] },
   { id: 'settings', roles: ['Manager'] },
 ];
@@ -21,7 +21,11 @@ export default function App({ session, onLogout }) {
     [userRole],
   );
 
-  const defaultNav = useMemo(() => (userRole === 'Manager' ? 'dashboard' : 'recipes'), [userRole]);
+  const defaultNav = useMemo(() => {
+    if (userRole === 'Manager') return 'dashboard';
+    if (userRole === 'Chef') return 'recipes';
+    return 'cook';
+  }, [userRole]);
 
   const [activeNav, setActiveNav] = useState(() => {
     return allowedNav.includes(defaultNav) ? defaultNav : allowedNav[0] ?? 'recipes';
@@ -34,19 +38,15 @@ export default function App({ session, onLogout }) {
 
   const renderContent = () => {
     if (activeNav === 'settings') return <SettingsPage session={session} />;
+    if (activeNav === 'cook') return <CookPortal />;
+    if (activeNav === 'recipes') return <ChefPortal />;
 
     if (userRole === 'Manager') {
-      if (activeNav === 'cook') return <CookPortal />;
       if (activeNav === 'inventory') return <ManagerDashboard initialTab="inventory" title="Inventory" />;
-      if (activeNav === 'recipes') return <ChefPortal />;
       return <ManagerDashboard initialTab="overview" title="Manager" />;
     }
 
-    if (userRole === 'Chef') {
-      return <ChefPortal />;
-    }
-
-    return <CookPortal />;
+    return <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 text-sm text-zinc-200">Not available.</div>;
   };
 
   return (

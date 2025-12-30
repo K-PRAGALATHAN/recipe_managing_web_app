@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import cookRouter from './routes/cook.js';
 import authRouter from './routes/auth.js';
 import adminUsersRouter from './routes/admin.users.js';
+import chefRouter from './routes/chef.js';
 
 dotenv.config();
 
@@ -30,6 +31,8 @@ export function createApp() {
         '/api/auth/me',
         '/api/auth/supabase',
         '/api/admin/users',
+        '/api/chef/recipes',
+        '/api/chef/recipes/:id',
         '/api/cook/menu',
         '/api/cook/status?date=YYYY-MM-DD',
       ],
@@ -38,6 +41,7 @@ export function createApp() {
   app.get('/health', (_req, res) => res.json({ ok: true }));
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminUsersRouter);
+  app.use('/api/chef', chefRouter);
   app.use('/api/cook', cookRouter);
 
   app.use((_req, res) => res.status(404).json({ error: 'not_found' }));

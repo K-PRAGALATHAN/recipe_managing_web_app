@@ -1,14 +1,20 @@
-# Backend (Cook)
+# Backend (Cook + Chef)
 
-Minimal Express backend for the Cook portal.
+Minimal Express backend for the Cook + Chef portals.
 
-## Database (Cook)
+## Database
 
-By default the backend uses a local SQLite database at `./data/cook.db`. You can also use Supabase (PostgreSQL).
+By default the backend uses local SQLite databases:
+
+- Cook: `./data/cook.db`
+- Chef: `./data/chef.db`
+
+Cook can also use Supabase (PostgreSQL).
 
 ### SQLite (local)
 
-- Default store mode is `sqlite`; set `SQLITE_PATH` to override the DB file location.
+- Cook store mode defaults to `sqlite`; set `SQLITE_PATH` to override the DB file location.
+- Chef store mode defaults to `sqlite`; set `CHEF_SQLITE_PATH` to override the DB file location.
 
 ### Supabase (PostgreSQL)
 
@@ -27,6 +33,12 @@ npm start
 ## Endpoints
 
 - `GET /health`
+- `GET /api/chef/recipes`
+- `POST /api/chef/recipes` body: `{ "name": "...", "portions": 1, "yield": 1, "ingredients": [{ "name": "...", "quantity": 1, "unit": "g" }], "steps": ["..."] }`
+- `GET /api/chef/recipes/:id`
+- `POST /api/chef/recipes/:id/versions` body: `{ "portions": 1, "yield": 1, "ingredients": [...], "steps": [...] }`
+- `PUT /api/chef/recipes/:id/versions/:version` body: `{ "portions": 1, "yield": 1, "ingredients": [...], "steps": [...] }` (draft-only)
+- `POST /api/chef/recipes/:id/versions/:version/release` (draft-only)
 - `GET /api/cook/menu`
 - `GET /api/cook/status?date=YYYY-MM-DD`
 - `PUT /api/cook/status?date=YYYY-MM-DD` body: `{ "selectedMenuIds": [], "doneIds": [] }`
