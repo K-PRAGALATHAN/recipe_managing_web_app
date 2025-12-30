@@ -105,6 +105,7 @@ export default function ManagerDashboard() {
       if (!mounted) return;
       await fetchVendors();
       await fetchIngredients();
+      await fetchWasteLogs();
     })();
     return () => {
       mounted = false;
@@ -134,9 +135,10 @@ export default function ManagerDashboard() {
 
   const wasteTotal = useMemo(() => {
     return wasteLog.reduce((sum, entry) => {
-      const ingredient = ingredientsById[entry.ingredientId];
-      if (!ingredient) return sum;
-      return sum + Number(entry.qty) * Number(ingredient.unitCost);
+      // If we joined data, unitCost might be in entry.ingredients (if using select param)
+      // modifying to use the joined data directly or fallback
+      const cost = entry.ingredients?.unit_cost || ingredientsById[entry.ingredientId]?.unitCost || 0;
+      return sum + Number(entry.qty) * Number(cost);
     }, 0);
   }, [wasteLog, ingredientsById]);
 
@@ -298,14 +300,67 @@ export default function ManagerDashboard() {
     }
   };
 
-  const logWaste = () => {
+  const fetchWasteLogs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('waste_logs')
+        .select(`
+          id,
+          qty,
+          reason,
+          created_at,
+          ingredient_id,
+          ingredients (
+            name,
+            unit,
+            unit_cost
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Failed to fetch waste logs', error);
+        return;
+      }
+
+      // Transform for UI
+      const formatted = data.map(d => ({
+        id: d.id,
+        at: d.created_at,
+        ingredientId: d.ingredient_id,
+        qty: d.qty,
+        reason: d.reason,
+        ingredients: d.ingredients // Keep joined data
+      }));
+
+      setWasteLog(formatted);
+    } catch (err) {
+      console.error('Error fetching waste logs', err);
+    }
+  };
+
+  const logWaste = async () => {
     const qty = Number(wasteDraft.qty);
     if (!wasteDraft.ingredientId || !Number.isFinite(qty) || qty <= 0) return;
-    setWasteLog((prev) => [
-      { id: `w${Date.now()}`, at: new Date().toISOString(), ingredientId: wasteDraft.ingredientId, qty, reason: wasteDraft.reason.trim() || '—' },
-      ...prev,
-    ]);
-    setWasteDraft((prev) => ({ ...prev, qty: 0.5 }));
+
+    try {
+      const { error } = await supabase.from('waste_logs').insert([{
+        ingredient_id: parseInt(wasteDraft.ingredientId),
+        qty,
+        reason: wasteDraft.reason.trim() || 'Prep waste'
+      }]);
+
+      if (error) {
+        console.error('Failed to log waste', error);
+        alert(`Failed to saving waste log: ${error.message}`);
+        return;
+      }
+
+      await fetchWasteLogs();
+      setWasteDraft((prev) => ({ ...prev, qty: 0.5 }));
+    } catch (err) {
+      console.error('Error logging waste', err);
+    }
   };
 
   const addAccount = async () => {
@@ -334,8 +389,8 @@ export default function ManagerDashboard() {
         alert(`Error creating account: ${data.error}`);
       }
     } catch (error) {
-      console.error('Error creating account:', error);
-      alert('Error creating account. Please try again.');
+      console.error('Error creating account (Network/Exception):', error);
+      alert(`Error creating account (Network Error): ${error.message}. Is the backend running on port 3001?`);
     }
   };
 

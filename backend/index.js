@@ -35,16 +35,43 @@ app.post('/create-user', async (req, res) => {
       email_confirm: true
     });
 
+    let userId;
+
     if (authError) {
-      console.error('Auth error:', authError);
-      return res.status(400).json({ error: authError.message });
+      // If user already exists, fetch their ID to recover
+      if (authError.message && (authError.message.includes('already registered') || authError.status === 422)) {
+        console.log('User already exists, attempting to recover ID...');
+
+        // List users to find the one with this email
+        // Note: In production with many users this is inefficient, but for this specific "fix" request it works.
+        const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+
+        if (listError) {
+          console.error('Failed to list users for recovery:', listError);
+          return res.status(400).json({ error: authError.message });
+        }
+
+        const existingUser = users.find(u => u.email === email);
+        if (existingUser) {
+          console.log('Found existing user ID:', existingUser.id);
+          userId = existingUser.id;
+        } else {
+          console.error('Could not find existing user despite error.');
+          return res.status(400).json({ error: authError.message });
+        }
+      } else {
+        console.error('Auth error:', authError);
+        return res.status(400).json({ error: authError.message });
+      }
+    } else {
+      userId = authData.user.id;
     }
 
-    // Insert into profiles table
+    // Insert or update into profiles table (upsert) to avoid unique constraint violations
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .insert({
-        id: authData.user.id,
+      .upsert({
+        id: userId,
         email,
         role,
         cuisine: cuisine || null
@@ -52,16 +79,14 @@ app.post('/create-user', async (req, res) => {
 
     if (profileError) {
       console.error('Profile error:', profileError);
-      // If profile insertion fails, we should probably delete the created user
-      await supabase.auth.admin.deleteUser(authData.user.id);
       return res.status(400).json({ error: profileError.message });
     }
 
     res.json({
-      message: 'User created successfully',
+      message: 'User created/updated successfully',
       user: {
-        id: authData.user.id,
-        email: authData.user.email
+        id: userId,
+        email: email
       }
     });
 
