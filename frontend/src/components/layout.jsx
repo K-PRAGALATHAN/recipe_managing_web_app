@@ -7,6 +7,11 @@ import {
   ClipboardList,
   Settings,
   LogOut,
+  Users,
+  Building2,
+  Package,
+  Calculator,
+  Download,
   Menu,
   X,
 } from 'lucide-react';
@@ -17,16 +22,20 @@ const Layout = ({ children, userRole = 'Chef', userEmail, onLogout, activeNav = 
   const avatarLetter = (displayName?.trim()?.[0] || userRole?.trim()?.[0] || 'U').toUpperCase();
 
   const navigation = [
-    { id: 'dashboard', name: 'Dashboard', icon: <LayoutDashboard size={20} />, roles: ['Manager'] },
-    { id: 'cook', name: 'Cook', icon: <ClipboardList size={20} />, roles: ['Manager', 'Chef', 'Cook'] },
-    { id: 'recipes', name: 'Recipes', icon: <UtensilsCrossed size={20} />, roles: ['Manager', 'Chef'] },
-    { id: 'inventory', name: 'Inventory', icon: <ClipboardList size={20} />, roles: ['Manager'] },
+    { id: 'overview', name: 'Overview', icon: <LayoutDashboard size={20} />, roles: ['Manager'] },
+    { id: 'vendors', name: 'Vendors', icon: <Building2 size={20} />, roles: ['Manager'] },
+    { id: 'inventory', name: 'Inventory', icon: <Package size={20} />, roles: ['Manager'] },
+    { id: 'staff', name: 'Staff', icon: <Users size={20} />, roles: ['Manager'] },
+    { id: 'costing', name: 'Costing', icon: <Calculator size={20} />, roles: ['Manager'] },
+    { id: 'reports', name: 'Reports', icon: <Download size={20} />, roles: ['Manager'] },
+    { id: 'cook', name: 'Cook', icon: <ClipboardList size={20} />, roles: ['Chef', 'Cook'] },
+    { id: 'recipes', name: 'Recipes', icon: <UtensilsCrossed size={20} />, roles: ['Chef'] },
     { id: 'settings', name: 'Settings', icon: <Settings size={20} />, roles: ['Manager'] },
   ];
 
   return (
     <div className="flex min-h-screen bg-zinc-950 text-zinc-100">
-      
+
       {/* --- Mobile Header --- */}
       <div className="lg:hidden fixed top-0 w-full bg-zinc-900 border-b border-zinc-800 z-50 px-4 py-3 flex justify-between items-center">
         <h1 className="font-black text-orange-500 tracking-tighter text-xl">RECIPE.PRO</h1>
@@ -59,16 +68,14 @@ const Layout = ({ children, userRole = 'Chef', userEmail, onLogout, activeNav = 
                     setSidebarOpen(false);
                     onNavigate?.(item.id);
                   }}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 transition-all group ${
-                    activeNav === item.id
-                      ? 'bg-zinc-800 text-white'
-                      : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-                  }`}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 transition-all group ${activeNav === item.id
+                    ? 'bg-zinc-800 text-white'
+                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                    }`}
                 >
                   <span
-                    className={`transition-colors ${
-                      activeNav === item.id ? 'text-orange-500' : 'group-hover:text-orange-500'
-                    }`}
+                    className={`transition-colors ${activeNav === item.id ? 'text-orange-500' : 'group-hover:text-orange-500'
+                      }`}
                   >
                     {item.icon}
                   </span>
@@ -89,7 +96,7 @@ const Layout = ({ children, userRole = 'Chef', userEmail, onLogout, activeNav = 
                 <p className="text-xs text-zinc-500 mt-1">{userRole}</p>
               </div>
             </div>
-            
+
             <button
               type="button"
               onClick={() => {
@@ -114,8 +121,8 @@ const Layout = ({ children, userRole = 'Chef', userEmail, onLogout, activeNav = 
 
       {/* Mobile Overlay Background */}
       {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 lg:hidden z-30" 
+        <div
+          className="fixed inset-0 bg-black/60 lg:hidden z-30"
           onClick={() => setSidebarOpen(false)}
         />
       )}

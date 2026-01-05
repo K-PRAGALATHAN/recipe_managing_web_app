@@ -53,7 +53,7 @@ const App = () => {
       if (String(err?.message) === 'no_account') {
         setInitialError('No account found for this Google login. Ask the manager to create your user.');
       } else {
-        setInitialError("We couldn't finish Google sign-in. Please try again.");
+        setInitialError(`We couldn't finish Google sign-in. Error: ${err?.message || String(err)}`);
       }
     } finally {
       try {
@@ -63,10 +63,6 @@ const App = () => {
       }
     }
   };
-
-  if (typeof window !== 'undefined' && window.location?.pathname === '/oauth/callback') {
-    return <OAuthCallback onComplete={finishOAuthLogin} />;
-  }
 
   const appSession = useMemo(() => {
     if (!authSession) return null;
@@ -78,6 +74,10 @@ const App = () => {
       user: authSession.user,
     };
   }, [authSession, remember]);
+
+  if (typeof window !== 'undefined' && window.location?.pathname === '/oauth/callback') {
+    return <OAuthCallback onComplete={finishOAuthLogin} />;
+  }
 
   if (!appSession) {
     return (

@@ -19,7 +19,7 @@ const createEmptyForm = () => ({
 
 const normalizeLines = (lines) => lines.map((line) => line.trim()).filter(Boolean);
 
-export default function AddRecipeModal({ open, onClose, onCreate }) {
+export default function AddRecipeModal({ open, onClose, onCreate, initialData }) {
   const [form, setForm] = useState(createEmptyForm);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -27,10 +27,24 @@ export default function AddRecipeModal({ open, onClose, onCreate }) {
 
   useEffect(() => {
     if (!open) return;
+
+    if (initialData) {
+      setForm({
+        ...createEmptyForm(),
+        ...initialData,
+        ingredients: Array.isArray(initialData.ingredients)
+          ? initialData.ingredients.map(i => typeof i === 'object' ? i.name : i)
+          : [''],
+        tagsCsv: Array.isArray(initialData.tags) ? initialData.tags.join(', ') : '',
+      });
+    } else {
+      setForm(createEmptyForm());
+    }
+
     setErrors({});
     setSubmitting(false);
     queueMicrotask(() => firstInputRef.current?.focus?.());
-  }, [open]);
+  }, [open, initialData]);
 
   useEffect(() => {
     if (!open) return;
@@ -143,7 +157,7 @@ export default function AddRecipeModal({ open, onClose, onCreate }) {
         <div className="flex items-start justify-between gap-4 border-b border-zinc-800 p-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Chef Portal</p>
-            <h2 className="mt-1 text-lg font-extrabold text-white">Create new recipe</h2>
+            <h2 className="mt-1 text-lg font-extrabold text-white">{initialData ? 'Edit recipe' : 'Create new recipe'}</h2>
           </div>
           <button
             type="button"
@@ -379,15 +393,14 @@ export default function AddRecipeModal({ open, onClose, onCreate }) {
             <button
               type="submit"
               disabled={submitting}
-              className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white ${
-                submitting ? 'bg-emerald-700/60' : 'bg-emerald-600 hover:bg-emerald-700'
-              }`}
+              className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white ${submitting ? 'bg-emerald-700/60' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
             >
-              {submitting ? 'Creating…' : 'Create recipe'}
+              {submitting ? (initialData ? 'Saving...' : 'Creating...') : (initialData ? 'Save changes' : 'Create recipe')}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }

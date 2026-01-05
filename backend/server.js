@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import http from 'node:http';
 import process from 'node:process';
 import { createApp } from './src/app.js';

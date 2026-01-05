@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ChefHat, ClipboardCheck, FilePlus2 } from 'lucide-react';
+import { CheckCircle2, ChefHat, ClipboardCheck, FilePlus2, Pencil, Trash2 } from 'lucide-react';
 import AddRecipeModal from './AddRecipeModal.jsx';
-import { createChefRecipe, listChefRecipes } from '../utils/chefApi';
+import { createChefRecipe, listChefRecipes, getRecipe, updateDraftRecipeVersion, deleteRecipe } from '../utils/chefApi';
 
 const startOfDay = (ts) => {
   const d = new Date(ts);
@@ -37,6 +37,7 @@ export default function ChefPortal() {
   const [filter, setFilter] = useState('All');
   const [recipes, setRecipes] = useState(() => []);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingData, setEditingData] = useState(null);
   const [notice, setNotice] = useState(null);
 
   useEffect(() => {
@@ -47,11 +48,11 @@ export default function ChefPortal() {
         if (cancelled) return;
         const normalized = Array.isArray(rows)
           ? rows.map((r) => ({
-              id: String(r.id),
-              name: String(r.name ?? ''),
-              status: uiStatus(r.latestStatus),
-              updatedAt: toUpdatedAtMs({ latestUpdatedAt: r.latestUpdatedAt, createdAt: r.createdAt }),
-            }))
+            id: String(r.id),
+            name: String(r.name ?? ''),
+            status: uiStatus(r.latestStatus),
+            updatedAt: toUpdatedAtMs({ latestUpdatedAt: r.latestUpdatedAt, createdAt: r.createdAt }),
+          }))
           : [];
         setRecipes(normalized);
       } catch (err) {
@@ -78,12 +79,55 @@ export default function ChefPortal() {
     return { total, drafts, active };
   }, [recipes]);
 
+  const handleEdit = async (recipeId) => {
+    try {
+      const { recipe } = await getRecipe(recipeId);
+      if (!recipe) throw new Error('Recipe not found');
+
+      // Find the draft version (assuming only one draft exists or we pick the latest)
+      // The backend usually creates logic where versions are monotonic.
+      // We look for a version with status 'draft'.
+      const draft = recipe.versions?.find((v) => String(v.status).toLowerCase() === 'draft');
+
+      if (!draft) {
+        setNotice('This recipe has no draft version to edit.');
+        window.setTimeout(() => setNotice(null), 3000);
+        return;
+      }
+
+      setEditingData({
+        id: recipe.id,
+        version: draft.version,
+        name: recipe.name,
+        // Spread the draft data (ingredients, steps, etc.) into the form
+        ...draft.data,
+      });
+      setShowAdd(true);
+    } catch (err) {
+      console.error(err);
+      setNotice('Failed to load recipe details.');
+      window.setTimeout(() => setNotice(null), 3000);
+    }
+  };
+
+  const handleDelete = async (recipeId, recipeName) => {
+    if (!window.confirm(`Are you sure you want to delete "${recipeName}"? This action cannot be undone.`)) return;
+    try {
+      await deleteRecipe(recipeId);
+      setRecipes((prev) => prev.filter((r) => r.id !== recipeId));
+      setNotice(`Recipe "${recipeName}" deleted.`);
+      window.setTimeout(() => setNotice(null), 3000);
+    } catch (err) {
+      console.error(err);
+      setNotice('Failed to delete recipe. Please try again.');
+    }
+  };
+
   const card = 'rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-lg shadow-black/20';
   const pill = (active) =>
-    `px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-      active
-        ? 'bg-emerald-600 border-emerald-500 text-white'
-        : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-emerald-500/60'
+    `px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${active
+      ? 'bg-emerald-600 border-emerald-500 text-white'
+      : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-emerald-500/60'
     }`;
 
   return (
@@ -102,7 +146,7 @@ export default function ChefPortal() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setShowAdd(true)}
+            onClick={() => { setEditingData(null); setShowAdd(true); }}
             className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
           >
             <FilePlus2 size={16} />
@@ -159,57 +203,90 @@ export default function ChefPortal() {
               <p className="truncate text-sm font-semibold text-white">{recipe.name}</p>
               <p className="mt-1 text-xs text-zinc-500">Updated {formatUpdatedAt(recipe.updatedAt)}</p>
             </div>
-            <span
-              className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                recipe.status === 'Approved'
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleDelete(recipe.id, recipe.name)}
+                className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-400 hover:border-red-500/60 hover:text-red-400"
+                title="Delete recipe"
+              >
+                <Trash2 size={14} />
+              </button>
+              {recipe.status === 'Draft' ? (
+                <button
+                  onClick={() => handleEdit(recipe.id)}
+                  className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-400 hover:border-emerald-500/60 hover:text-emerald-400"
+                  aria-label="Edit recipe"
+                >
+                  <Pencil size={14} />
+                </button>
+              ) : null}
+              <span
+                className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${recipe.status === 'Approved'
                   ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20'
                   : 'bg-zinc-500/10 text-zinc-200 ring-1 ring-zinc-500/20'
-              }`}
-            >
-              {recipe.status}
-            </span>
+                  }`}
+              >
+                {recipe.status}
+              </span>
+            </div>
           </div>
         ))}
       </div>
 
       <AddRecipeModal
         open={showAdd}
-        onClose={() => setShowAdd(false)}
+        initialData={editingData}
+        onClose={() => {
+          setShowAdd(false);
+          setEditingData(null);
+        }}
         onCreate={async (payload) => {
-          const { recipe } = await createChefRecipe({
-            name: payload.name,
-            description: payload.description,
-            category: payload.category,
-            imageUrl: payload.imageUrl,
-            prepMinutes: payload.prepMinutes,
-            cookMinutes: payload.cookMinutes,
-            servings: payload.servings,
-            tags: payload.tags,
-            ingredients: payload.ingredients,
-            steps: payload.steps,
-          });
+          if (editingData) {
+            // Update mode
+            await updateDraftRecipeVersion({
+              recipeId: editingData.id,
+              version: editingData.version,
+              payload
+            });
+            setNotice(`Recipe “${payload.name}” updated.`);
+            // Optimistic update
+            setRecipes(prev => prev.map(r => r.id === editingData.id ? { ...r, name: payload.name, updatedAt: Date.now() } : r));
+          } else {
+            // Create mode
+            const { recipe } = await createChefRecipe({
+              name: payload.name,
+              description: payload.description,
+              category: payload.category,
+              imageUrl: payload.imageUrl,
+              prepMinutes: payload.prepMinutes,
+              cookMinutes: payload.cookMinutes,
+              servings: payload.servings,
+              tags: payload.tags,
+              ingredients: payload.ingredients,
+              steps: payload.steps,
+            });
 
-          const latest = Array.isArray(recipe?.versions) ? recipe.versions[0] : null;
+            const latest = Array.isArray(recipe?.versions) ? recipe.versions[0] : null;
 
-          setRecipes((prev) => [
-            {
-              id: String(recipe.id),
-              name: String(recipe.name ?? payload.name),
-              status: uiStatus(latest?.status),
-              updatedAt: toUpdatedAtMs({
-                latestUpdatedAt: latest?.updatedAt ?? latest?.createdAt,
-                createdAt: recipe.createdAt,
-              }),
-            },
-            ...prev,
-          ]);
-
-          setFilter('All');
-          setNotice(`Recipe “${payload.name}” created.`);
+            setRecipes((prev) => [
+              {
+                id: String(recipe.id),
+                name: String(recipe.name ?? payload.name),
+                status: uiStatus(latest?.status),
+                updatedAt: toUpdatedAtMs({
+                  latestUpdatedAt: latest?.updatedAt ?? latest?.createdAt,
+                  createdAt: recipe.createdAt,
+                }),
+              },
+              ...prev,
+            ]);
+            setFilter('All');
+            setNotice(`Recipe “${payload.name}” created.`);
+          }
           window.setTimeout(() => setNotice(null), 2500);
         }}
       />
     </div>
   );
 }
-

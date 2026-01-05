@@ -224,29 +224,9 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
 
   return (
     <div className="p-6 lg:p-10">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-white">{title}</h1>
-          <p className="text-zinc-400">Vendor & ingredient management, costing/margins, inventory & reports.</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                tab === t.id
-                  ? 'border-orange-500/70 bg-orange-600 text-white'
-                  : 'border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-orange-500/60'
-              }`}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          ))}
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-black tracking-tight text-white">{title}</h1>
+        <p className="text-zinc-400">Vendor & ingredient management, costing/margins, inventory & reports.</p>
       </div>
 
       {tab === 'overview' ? (
@@ -286,11 +266,10 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                     <p className="text-xs text-zinc-500">On hand: {i.onHand} {i.unit} • Par: {i.parLevel} {i.unit}</p>
                   </div>
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${
-                      Number(i.onHand) < Number(i.parLevel)
-                        ? 'bg-orange-500/10 text-orange-400'
-                        : 'bg-emerald-500/10 text-emerald-400'
-                    }`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${Number(i.onHand) < Number(i.parLevel)
+                      ? 'bg-orange-500/10 text-orange-400'
+                      : 'bg-emerald-500/10 text-emerald-400'
+                      }`}
                   >
                     {Number(i.onHand) < Number(i.parLevel) ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
                     {Number(i.onHand) < Number(i.parLevel) ? 'Low' : 'OK'}
@@ -668,11 +647,10 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
 
             {staffStatus.message ? (
               <div
-                className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
-                  staffStatus.kind === 'success'
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                    : 'border-orange-500/30 bg-orange-500/10 text-orange-200'
-                }`}
+                className={`mt-4 rounded-xl border px-4 py-3 text-sm ${staffStatus.kind === 'success'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                  : 'border-orange-500/30 bg-orange-500/10 text-orange-200'
+                  }`}
               >
                 {staffStatus.message}
               </div>

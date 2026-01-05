@@ -27,6 +27,12 @@ export function listChefRecipes() {
   return apiJson('/api/chef/recipes');
 }
 
+export function deleteRecipe(id) {
+  return apiJson(`/api/chef/recipes/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 export function createChefRecipe(payload) {
   return apiJson('/api/chef/recipes', {
     method: 'POST',
@@ -41,3 +47,15 @@ export function releaseChefRecipeVersion({ recipeId, version }) {
   });
 }
 
+
+export function getRecipe(id) {
+  return apiJson(`/api/chef/recipes/${encodeURIComponent(id)}`);
+}
+
+export function updateDraftRecipeVersion({ recipeId, version, payload }) {
+  return apiJson(`/api/chef/recipes/${encodeURIComponent(recipeId)}/versions/${Number(version)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}

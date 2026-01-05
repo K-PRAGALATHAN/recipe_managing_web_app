@@ -6,10 +6,14 @@ import ManagerDashboard from './managerDashboard.jsx';
 import SettingsPage from './SettingsPage.jsx';
 
 const NAV_ITEMS = [
-  { id: 'dashboard', roles: ['Manager'] },
-  { id: 'cook', roles: ['Manager', 'Chef', 'Cook'] },
-  { id: 'recipes', roles: ['Manager', 'Chef'] },
+  { id: 'overview', roles: ['Manager'] },
+  { id: 'vendors', roles: ['Manager'] },
   { id: 'inventory', roles: ['Manager'] },
+  { id: 'staff', roles: ['Manager'] },
+  { id: 'costing', roles: ['Manager'] },
+  { id: 'reports', roles: ['Manager'] },
+  { id: 'cook', roles: ['Chef', 'Cook'] },
+  { id: 'recipes', roles: ['Chef'] },
   { id: 'settings', roles: ['Manager'] },
 ];
 
@@ -22,7 +26,7 @@ export default function App({ session, onLogout }) {
   );
 
   const defaultNav = useMemo(() => {
-    if (userRole === 'Manager') return 'dashboard';
+    if (userRole === 'Manager') return 'overview';
     if (userRole === 'Chef') return 'recipes';
     return 'cook';
   }, [userRole]);
@@ -42,8 +46,7 @@ export default function App({ session, onLogout }) {
     if (activeNav === 'recipes') return <ChefPortal />;
 
     if (userRole === 'Manager') {
-      if (activeNav === 'inventory') return <ManagerDashboard initialTab="inventory" title="Inventory" />;
-      return <ManagerDashboard initialTab="overview" title="Manager" />;
+      return <ManagerDashboard initialTab={activeNav} title={activeNav.charAt(0).toUpperCase() + activeNav.slice(1)} />;
     }
 
     return <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 text-sm text-zinc-200">Not available.</div>;

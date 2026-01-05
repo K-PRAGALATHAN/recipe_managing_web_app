@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import {
   createRecipe,
   createRecipeVersion,
+  deleteRecipe,
   getRecipeById,
   getRecipeVersion,
   listRecipes,
@@ -31,6 +32,18 @@ router.post('/recipes', async (req, res, next) => {
     const initial = normalizeRecipeData(req.body);
     const created = await createRecipe({ name, createdBy: req.user.id, initialData: initial });
     res.status(201).json(created);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/recipes/:id', async (req, res, next) => {
+  try {
+    const id = String(req.params.id ?? '').trim();
+    if (!id) return res.status(400).json({ error: 'invalid_id' });
+
+    await deleteRecipe(id);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
@@ -118,17 +131,17 @@ function normalizeRecipeData(body) {
 
   const ingredients = Array.isArray(body?.ingredients)
     ? body.ingredients
-        .map((i) => {
-          if (typeof i === 'string') {
-            return { name: i.trim(), quantity: null, unit: '' };
-          }
-          return {
-            name: String(i?.name ?? '').trim(),
-            quantity: i?.quantity == null ? null : Number(i.quantity),
-            unit: String(i?.unit ?? '').trim(),
-          };
-        })
-        .filter((i) => i.name)
+      .map((i) => {
+        if (typeof i === 'string') {
+          return { name: i.trim(), quantity: null, unit: '' };
+        }
+        return {
+          name: String(i?.name ?? '').trim(),
+          quantity: i?.quantity == null ? null : Number(i.quantity),
+          unit: String(i?.unit ?? '').trim(),
+        };
+      })
+      .filter((i) => i.name)
     : [];
 
   const steps = Array.isArray(body?.steps)
