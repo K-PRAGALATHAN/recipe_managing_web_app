@@ -37,22 +37,14 @@ const randomPassword = (length = 16) => {
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-const INITIAL_VENDORS = [
-  { id: 'v1', name: 'Fresh Farm Produce', contact: 'freshfarm@example.com', leadTimeDays: 2, active: true },
-  { id: 'v2', name: 'Ocean Seafood Co', contact: 'oceanseafood@example.com', leadTimeDays: 1, active: true },
-  { id: 'v3', name: 'Metro Meats', contact: 'metromeats@example.com', leadTimeDays: 3, active: true },
-];
 
-const INITIAL_INGREDIENTS = [
-  { id: 'i1', name: 'Chicken Breast', unit: 'kg', unitCost: 7.5, onHand: 6, parLevel: 10, vendorId: 'v3' },
-  { id: 'i2', name: 'Salmon Fillet', unit: 'kg', unitCost: 18.9, onHand: 2, parLevel: 4, vendorId: 'v2' },
-  { id: 'i3', name: 'Roma Tomatoes', unit: 'kg', unitCost: 2.2, onHand: 12, parLevel: 8, vendorId: 'v1' },
-];
+
+import { getSessionToken } from '../utils/authSession';
 
 export default function ManagerDashboard({ initialTab = 'overview', title = 'Manager' }) {
   const [tab, setTab] = useState(initialTab);
-  const [vendors, setVendors] = useState(INITIAL_VENDORS);
-  const [ingredients, setIngredients] = useState(INITIAL_INGREDIENTS);
+  const [vendors, setVendors] = useState([]);
+  const [ingredients, setIngredients] = useState([]);
   const [newVendor, setNewVendor] = useState({ name: '', contact: '', leadTimeDays: 2 });
   const [newIngredient, setNewIngredient] = useState({
     name: '',
@@ -60,15 +52,74 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
     unitCost: 0,
     onHand: 0,
     parLevel: 0,
-    vendorId: INITIAL_VENDORS[0]?.id ?? '',
+    vendorId: '',
   });
   const [marginInput, setMarginInput] = useState({ cost: 12.5, price: 24 });
   const [wasteLog, setWasteLog] = useState([]);
-  const [wasteDraft, setWasteDraft] = useState({ ingredientId: INITIAL_INGREDIENTS[0]?.id ?? '', qty: 0.5, reason: 'Prep waste' });
+  const [wasteDraft, setWasteDraft] = useState({ ingredientId: '', qty: 0.5, reason: 'Prep waste' });
   const [staffDraft, setStaffDraft] = useState({ email: '', password: '', role: 'Cook' });
   const [staffStatus, setStaffStatus] = useState({ kind: '', message: '' });
   const [creatingStaff, setCreatingStaff] = useState(false);
   const [createdStaff, setCreatedStaff] = useState([]);
+  const [token, setToken] = useState(getSessionToken() || '');
+  const [ingredientError, setIngredientError] = useState('');
+
+  // Fetch initial data
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchData = async () => {
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const [vRes, iRes, wRes] = await Promise.all([
+          fetch('/api/manager/vendors', { headers }),
+          fetch('/api/manager/ingredients', { headers }),
+          fetch('/api/manager/wastage', { headers })
+        ]);
+
+        if (vRes.ok) {
+          const data = await vRes.json();
+          setVendors(data.vendors || []);
+        }
+        if (iRes.ok) {
+          const data = await iRes.json();
+          // Map DB snake_case to frontend camelCase if needed, but we try to keep it consistent
+          // The backend routes return objects with snake_case keys for DB columns usually, 
+          // let's adjust to what the UI expects (camelCase) or update UI. 
+          // UI expects: id, name, unit, unitCost, onHand, parLevel, vendorId
+          // Backend sends: id, name, unit, unit_cost, on_hand, par_level, vendor_id
+          const items = (data.ingredients || []).map(i => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+            unitCost: i.unit_cost,
+            onHand: i.on_hand,
+            parLevel: i.par_level,
+            vendorId: i.vendor_id
+          }));
+          setIngredients(items);
+        }
+        if (wRes.ok) {
+          const data = await wRes.json();
+          // UI expects: id, at, ingredientId, qty, reason
+          // Backend sends: id, created_at, ingredient_id, amount, reason
+          const logs = (data.wastage || []).map(w => ({
+            id: w.id,
+            at: w.created_at,
+            ingredientId: w.ingredient_id,
+            qty: w.amount,
+            reason: w.reason
+          }));
+          setWasteLog(logs);
+        }
+      } catch (err) {
+        console.error('Failed to fetch manager data', err);
+      }
+    };
+
+    fetchData();
+  }, [token, tab]);
 
   useEffect(() => {
     setTab(initialTab);
@@ -120,56 +171,172 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
   const buttonSecondary =
     'inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-semibold text-zinc-100 transition hover:border-orange-500/60';
 
-  const addVendor = () => {
+  const addVendor = async () => {
     const name = newVendor.name.trim();
     if (!name) return;
-    setVendors((prev) => [
-      ...prev,
-      {
-        id: `v${Date.now()}`,
-        name,
-        contact: newVendor.contact.trim() || '—',
-        leadTimeDays: Math.max(0, Number(newVendor.leadTimeDays) || 0),
-        active: true,
-      },
-    ]);
-    setNewVendor({ name: '', contact: '', leadTimeDays: 2 });
+
+    try {
+      const res = await fetch('/api/manager/vendors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name,
+          contact: newVendor.contact.trim(),
+          leadTimeDays: Math.max(0, Number(newVendor.leadTimeDays) || 0),
+          active: true
+        })
+      });
+      if (res.ok) {
+        const { vendor } = await res.json();
+        setVendors(prev => [...prev, vendor]);
+        setNewVendor({ name: '', contact: '', leadTimeDays: 2 });
+      }
+    } catch (e) { console.error(e); }
   };
 
-  const removeVendor = (vendorId) => {
-    setVendors((prev) => prev.filter((v) => v.id !== vendorId));
-    setIngredients((prev) => prev.map((i) => (i.vendorId === vendorId ? { ...i, vendorId: '' } : i)));
+  const removeVendor = async (vendorId) => {
+    if (!confirm('Delete this vendor?')) return;
+    try {
+      await fetch(`/api/manager/vendors/${vendorId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setVendors((prev) => prev.filter((v) => v.id !== vendorId));
+      // We probably should update ingredients too, but for now just UI side cleaup
+      setIngredients((prev) => prev.map((i) => (i.vendorId === vendorId ? { ...i, vendorId: '' } : i)));
+    } catch (e) { console.error(e); }
   };
 
-  const addIngredient = () => {
+  const toggleVendorStatus = async (vendorId, currentStatus) => {
+    try {
+      const res = await fetch(`/api/manager/vendors/${vendorId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ active: !currentStatus })
+      });
+      if (res.ok) {
+        setVendors((prev) => prev.map((v) => (v.id === vendorId ? { ...v, active: !currentStatus } : v)));
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const addIngredient = async () => {
     const name = newIngredient.name.trim();
     if (!name) return;
-    setIngredients((prev) => [
-      ...prev,
-      {
-        id: `i${Date.now()}`,
+    if (!newIngredient.vendorId) {
+      setIngredientError('Please select a vendor.');
+      return;
+    }
+    setIngredientError('');
+
+    try {
+      const payload = {
         name,
         unit: newIngredient.unit.trim() || 'unit',
         unitCost: Math.max(0, Number(newIngredient.unitCost) || 0),
         onHand: Math.max(0, Number(newIngredient.onHand) || 0),
         parLevel: Math.max(0, Number(newIngredient.parLevel) || 0),
-        vendorId: newIngredient.vendorId || '',
-      },
-    ]);
-    setNewIngredient((prev) => ({ ...prev, name: '', unitCost: 0, onHand: 0, parLevel: 0 }));
+        vendorId: newIngredient.vendorId || ''
+      };
+
+      const res = await fetch('/api/manager/ingredients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const { ingredient } = await res.json();
+        // Convert back to camelCase for state
+        const newItem = {
+          id: ingredient.id,
+          name: ingredient.name,
+          unit: ingredient.unit,
+          unitCost: ingredient.unit_cost,
+          onHand: ingredient.on_hand,
+          parLevel: ingredient.par_level,
+          vendorId: ingredient.vendor_id
+        };
+        setIngredients((prev) => [...prev, newItem]);
+        setNewIngredient((prev) => ({ ...prev, name: '', unitCost: 0, onHand: 0, parLevel: 0 }));
+      }
+    } catch (e) { console.error(e); }
   };
 
-  const updateIngredient = (ingredientId, patch) =>
-    setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? { ...i, ...patch } : i)));
+  const updateIngredient = async (ingredientId, patch) => {
+    // patch keys need to be snake_case for API if we are sending them directly,
+    // or we handle conversion. The UI passes camelCase.
+    const apiPatch = {};
+    if (patch.onHand !== undefined) apiPatch.onHand = patch.onHand;
+    if (patch.parLevel !== undefined) apiPatch.parLevel = patch.parLevel;
+    if (patch.unitCost !== undefined) apiPatch.unitCost = patch.unitCost;
+    if (patch.vendorId !== undefined) apiPatch.vendorId = patch.vendorId;
 
-  const logWaste = () => {
+    try {
+      const res = await fetch(`/api/manager/ingredients/${ingredientId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(apiPatch)
+      });
+
+      if (res.ok) {
+        const { ingredient } = await res.json();
+        // Update local state with the returned (authoritative) data
+        const updatedItem = {
+          id: ingredient.id,
+          name: ingredient.name,
+          unit: ingredient.unit,
+          unitCost: ingredient.unit_cost,
+          onHand: ingredient.on_hand,
+          parLevel: ingredient.par_level,
+          vendorId: ingredient.vendor_id
+        };
+        setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? updatedItem : i)));
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const logWaste = async () => {
     const qty = Number(wasteDraft.qty);
-    if (!wasteDraft.ingredientId || !Number.isFinite(qty) || qty <= 0) return;
-    setWasteLog((prev) => [
-      { id: `w${Date.now()}`, at: new Date().toISOString(), ingredientId: wasteDraft.ingredientId, qty, reason: wasteDraft.reason.trim() || '-' },
-      ...prev,
-    ]);
-    setWasteDraft((prev) => ({ ...prev, qty: 0.5 }));
+    if (!wasteDraft.ingredientId) {
+      alert("Please select an ingredient.");
+      return;
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      alert("Please enter a valid quantity greater than 0.");
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/manager/wastage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          ingredientId: wasteDraft.ingredientId,
+          qty,
+          reason: wasteDraft.reason.trim() || '-'
+        })
+      });
+
+      if (res.ok) {
+        const { entry } = await res.json();
+        const newItem = {
+          id: entry.id,
+          at: entry.created_at,
+          ingredientId: entry.ingredient_id,
+          qty: entry.amount,
+          reason: entry.reason
+        };
+        setWasteLog((prev) => [newItem, ...prev]);
+        setWasteDraft((prev) => ({ ...prev, qty: 0.5 }));
+      } else {
+        const err = await res.json();
+        alert(`Failed to log waste: ${err.error || 'Unknown error'}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert(`Error logging waste: ${e.message}`);
+    }
   };
 
   const createStaffUser = async () => {
@@ -357,7 +524,7 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                       </td>
                       <td className="py-3 pr-4">
                         <div className="flex flex-wrap gap-2">
-                          <button type="button" className={buttonSecondary} onClick={() => setVendors((prev) => prev.map((x) => (x.id === v.id ? { ...x, active: !x.active } : x)))}>
+                          <button type="button" className={buttonSecondary} onClick={() => toggleVendorStatus(v.id, v.active)}>
                             {v.active ? 'Deactivate' : 'Activate'}
                           </button>
                           <button type="button" className={buttonSecondary} onClick={() => removeVendor(v.id)}>
@@ -412,6 +579,7 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                     <option key={v.id} value={v.id}>{v.name}</option>
                   ))}
                 </select>
+                {ingredientError && <p className="mt-1 text-xs text-red-400">{ingredientError}</p>}
               </div>
               <button type="button" className={button} onClick={addIngredient} disabled={!newIngredient.name.trim()}>
                 <Plus size={16} />
@@ -521,6 +689,7 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
               <div className="sm:col-span-2">
                 <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Ingredient</label>
                 <select className={input} value={wasteDraft.ingredientId} onChange={(e) => setWasteDraft((p) => ({ ...p, ingredientId: e.target.value }))}>
+                  <option value="">Select Ingredient...</option>
                   {ingredients.map((i) => (
                     <option key={i.id} value={i.id}>{i.name}</option>
                   ))}

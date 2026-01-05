@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import cookRouter from './routes/cook.js';
 import authRouter from './routes/auth.js';
 import adminUsersRouter from './routes/admin.users.js';
+import managerRouter from './routes/manager.js';
 import chefRouter from './routes/chef.js';
 
 dotenv.config();
@@ -41,6 +42,7 @@ export function createApp() {
   app.get('/health', (_req, res) => res.json({ ok: true }));
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminUsersRouter);
+  app.use('/api/manager', managerRouter);
   app.use('/api/chef', chefRouter);
   app.use('/api/cook', cookRouter);
 

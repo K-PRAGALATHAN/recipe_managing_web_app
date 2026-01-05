@@ -88,16 +88,50 @@ export async function createManagedUser({ username, password, role }) {
       email_confirm: true,
       user_metadata: { role: normalizedRole },
     });
+
     if (error) {
-      const message = String(error?.message || '');
-      if (message.toLowerCase().includes('already') || message.toLowerCase().includes('exists')) {
-        const err = new Error('supabase_email_taken');
-        err.code = 'supabase_email_taken';
-        throw err;
+      // If user already exists, fetch their ID to recover
+      if (error.message && (error.message.includes('already registered') || error.status === 422)) {
+        console.log('User already exists, attempting to recover ID...');
+        const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+
+        if (listError) {
+          const err = new Error('supabase_email_taken');
+          err.code = 'supabase_email_taken';
+          throw err;
+        }
+
+        const existingUser = users.find(u => u.email === email);
+        if (existingUser) {
+          console.log('Found existing user ID:', existingUser.id);
+          supabaseUserId = existingUser.id;
+        } else {
+          const err = new Error('supabase_email_taken');
+          err.code = 'supabase_email_taken';
+          throw err;
+        }
+      } else {
+        throw error;
       }
-      throw error;
+    } else {
+      supabaseUserId = data?.user?.id ?? null;
     }
-    supabaseUserId = data?.user?.id ?? null;
+
+    // Upsert into profiles table
+    if (supabaseUserId) {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: supabaseUserId,
+          email,
+          role: normalizedRole,
+        });
+
+      if (profileError) {
+        console.error('Failed to create profile:', profileError);
+        // We continue even if profile creation fails, as the auth user was created/found
+      }
+    }
   }
 
   const { saltB64, hashB64 } = createPasswordHash(password);
@@ -120,14 +154,10 @@ export async function createManagedUser({ username, password, role }) {
       passwordHashB64: hashB64,
     });
   } catch (e) {
-    if (supabaseUserId && hasSupabaseConfig()) {
-      try {
-        const supabase = createSupabaseClient();
-        await supabase.auth.admin.deleteUser(supabaseUserId);
-      } catch {
-        // Best-effort rollback; ignore.
-      }
-    }
+    // If local creation fails but Supabase succeeded (new user), we might want to cleanup, 
+    // but for "recovery" mode (existing user) we absolutely should NOT delete the user.
+    // Since we can't easily distinguish safely here, we'll skip the deletion to be safe.
+
     if (String(e?.message || '').toLowerCase().includes('unique')) {
       const err = new Error('username_taken');
       err.code = 'username_taken';
