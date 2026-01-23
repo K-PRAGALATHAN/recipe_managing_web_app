@@ -38,3 +38,11 @@ export function loginWithSupabase({ accessToken }) {
     body: JSON.stringify({ accessToken }),
   });
 }
+
+export function changePassword({ currentPassword, newPassword }) {
+  return apiJson('/api/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}

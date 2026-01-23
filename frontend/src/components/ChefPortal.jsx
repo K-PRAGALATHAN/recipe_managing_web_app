@@ -138,20 +138,12 @@ export default function ChefPortal() {
             <ChefHat className="h-6 w-6 text-emerald-400" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold text-white">Chef Portal</h1>
-            <p className="text-sm text-zinc-400">Create recipes, manage versions, approve releases.</p>
+            <h1 className="text-2xl font-extrabold text-white">Recipes</h1>
+            <p className="text-sm text-zinc-400">View and manage your recipe collection.</p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => { setEditingData(null); setShowAdd(true); }}
-            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-          >
-            <FilePlus2 size={16} />
-            New recipe
-          </button>
           <button
             type="button"
             onClick={() => setFilter('Draft')}
@@ -242,49 +234,55 @@ export default function ChefPortal() {
           setEditingData(null);
         }}
         onCreate={async (payload) => {
-          if (editingData) {
-            // Update mode
-            await updateDraftRecipeVersion({
-              recipeId: editingData.id,
-              version: editingData.version,
-              payload
-            });
-            setNotice(`Recipe “${payload.name}” updated.`);
-            // Optimistic update
-            setRecipes(prev => prev.map(r => r.id === editingData.id ? { ...r, name: payload.name, updatedAt: Date.now() } : r));
-          } else {
-            // Create mode
-            const { recipe } = await createChefRecipe({
-              name: payload.name,
-              description: payload.description,
-              category: payload.category,
-              imageUrl: payload.imageUrl,
-              prepMinutes: payload.prepMinutes,
-              cookMinutes: payload.cookMinutes,
-              servings: payload.servings,
-              tags: payload.tags,
-              ingredients: payload.ingredients,
-              steps: payload.steps,
-            });
+          try {
+            if (editingData) {
+              // Update mode
+              await updateDraftRecipeVersion({
+                recipeId: editingData.id,
+                version: editingData.version,
+                payload
+              });
+              setNotice(`Recipe “${payload.name}” updated.`);
+              // Optimistic update
+              setRecipes(prev => prev.map(r => r.id === editingData.id ? { ...r, name: payload.name, updatedAt: Date.now() } : r));
+            } else {
+              // Create mode
+              const { recipe } = await createChefRecipe({
+                name: payload.name,
+                description: payload.description,
+                category: payload.category,
+                imageUrl: payload.imageUrl,
+                prepMinutes: payload.prepMinutes,
+                cookMinutes: payload.cookMinutes,
+                servings: payload.servings,
+                tags: payload.tags,
+                ingredients: payload.ingredients,
+                steps: payload.steps,
+              });
 
-            const latest = Array.isArray(recipe?.versions) ? recipe.versions[0] : null;
+              const latest = Array.isArray(recipe?.versions) ? recipe.versions[0] : null;
 
-            setRecipes((prev) => [
-              {
-                id: String(recipe.id),
-                name: String(recipe.name ?? payload.name),
-                status: uiStatus(latest?.status),
-                updatedAt: toUpdatedAtMs({
-                  latestUpdatedAt: latest?.updatedAt ?? latest?.createdAt,
-                  createdAt: recipe.createdAt,
-                }),
-              },
-              ...prev,
-            ]);
-            setFilter('All');
-            setNotice(`Recipe “${payload.name}” created.`);
+              setRecipes((prev) => [
+                {
+                  id: String(recipe.id),
+                  name: String(recipe.name ?? payload.name),
+                  status: uiStatus(latest?.status),
+                  updatedAt: toUpdatedAtMs({
+                    latestUpdatedAt: latest?.updatedAt ?? latest?.createdAt,
+                    createdAt: recipe.createdAt,
+                  }),
+                },
+                ...prev,
+              ]);
+              setFilter('All');
+              setNotice(`Recipe “${payload.name}” created.`);
+            }
+          } catch (err) {
+            console.error('[ChefPortal:onCreate] error:', err);
+            setNotice(`Failed to ${editingData ? 'update' : 'create'} recipe: ${err?.message ?? 'unknown_error'}`);
+          } finally {
+            window.setTimeout(() => setNotice(null), 3500);
           }
-          window.setTimeout(() => setNotice(null), 2500);
         }}
       />
     </div>

@@ -167,6 +167,36 @@ export async function createManagedUser({ username, password, role }) {
   }
 }
 
+export async function changePassword({ userId, currentPassword, newPassword }) {
+  const user = await getUserById(userId);
+  if (!user) throw new Error('user_not_found');
+  if (!user.supabaseUserId) throw new Error('not_supabase_user');
+
+  const supabase = createSupabaseClient();
+
+  // 1. Verify current password
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
+  });
+
+  if (signInError) {
+    throw new Error('invalid_current_password');
+  }
+
+  // 2. Update password
+  const { error: updateError } = await supabase.auth.admin.updateUserById(
+    user.supabaseUserId,
+    { password: newPassword }
+  );
+
+  if (updateError) {
+    throw new Error(updateError.message || 'update_failed');
+  }
+
+  return true;
+}
+
 export async function getUserById(id) {
   const store = await loadSqliteAuthStore();
   return store.getUserById(id);

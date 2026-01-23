@@ -33,3 +33,16 @@ alter table recipe_versions enable row level security;
 -- Policy to allow authenticated users to do everything (internal tool style)
 create policy "Allow all for authenticated" on recipes for all using (auth.role() = 'authenticated');
 create policy "Allow all for authenticated" on recipe_versions for all using (auth.role() = 'authenticated');
+-- Create Vendors Table
+create table if not exists vendors (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  contact text,
+  lead_time_days integer not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+-- RLS
+alter table vendors enable row level security;
+create policy ""Allow all for authenticated"" on vendors for all using (auth.role() = 'authenticated');

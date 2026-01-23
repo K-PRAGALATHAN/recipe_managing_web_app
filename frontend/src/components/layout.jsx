@@ -14,6 +14,7 @@ import {
   Download,
   Menu,
   X,
+  FilePlus2,
 } from 'lucide-react';
 
 const Layout = ({ children, userRole = 'Chef', userEmail, onLogout, activeNav = 'dashboard', onNavigate }) => {
@@ -28,8 +29,10 @@ const Layout = ({ children, userRole = 'Chef', userEmail, onLogout, activeNav = 
     { id: 'staff', name: 'Staff', icon: <Users size={20} />, roles: ['Manager'] },
     { id: 'costing', name: 'Costing', icon: <Calculator size={20} />, roles: ['Manager'] },
     { id: 'reports', name: 'Reports', icon: <Download size={20} />, roles: ['Manager'] },
-    { id: 'cook', name: 'Cook', icon: <ClipboardList size={20} />, roles: ['Chef', 'Cook'] },
-    { id: 'recipes', name: 'Recipes', icon: <UtensilsCrossed size={20} />, roles: ['Chef'] },
+    { id: 'cook', name: 'Cook', icon: <ClipboardList size={20} />, roles: ['Cook'] },
+    { id: 'menu', name: 'Daily Menu', icon: <ClipboardList size={20} />, roles: ['Chef'] },
+    { id: 'view-recipes', name: 'Recipes', icon: <UtensilsCrossed size={20} />, roles: ['Chef'] },
+    { id: 'add-recipe', name: 'Add Recipe', icon: <FilePlus2 size={20} />, roles: ['Chef'] },
     { id: 'settings', name: 'Settings', icon: <Settings size={20} />, roles: ['Manager'] },
   ];
 

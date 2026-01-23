@@ -16,12 +16,15 @@ export async function listRecipes() {
         .from('recipes')
         .select(`
       id, name, created_at, created_by, archived,
-      recipe_versions!recipe_versions_recipe_id_fkey (version, status, updated_at)
+      recipe_versions (version, status, updated_at)
     `)
         .eq('archived', false)
         .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+        console.error('[supabase:listRecipes] error:', error);
+        throw error;
+    }
 
     // Transform to match expected internal format
     return recipes.map(r => {
@@ -47,13 +50,17 @@ export async function getRecipeById(id) {
         .from('recipes')
         .select(`
       id, name, created_at, created_by, archived,
-      recipe_versions!recipe_versions_recipe_id_fkey (*)
+      recipe_versions (*)
     `)
         .eq('id', id)
         .single();
 
-    if (error || !recipe) return null;
-    if (recipe.archived) return null; // Treat as deleted
+    if (error) {
+        if (error.code === 'PGRST116') return null;
+        console.error('[supabase:getRecipeById] error:', error);
+        return null;
+    }
+    if (!recipe || recipe.archived) return null; // Treat as deleted
 
     const versions = (recipe.recipe_versions || [])
         .sort((a, b) => b.version - a.version)
@@ -87,7 +94,11 @@ export async function getRecipeVersion({ recipeId, version }) {
         .eq('version', version)
         .single();
 
-    if (error || !data) return null;
+    if (error) {
+        if (error.code === 'PGRST116') return null;
+        console.error('[supabase:getRecipeVersion] error:', error);
+        return null;
+    }
 
     return {
         recipeId: data.recipe_id,
@@ -104,6 +115,7 @@ export async function getRecipeVersion({ recipeId, version }) {
 }
 
 export async function createRecipe({ name, createdBy, initialData }) {
+    console.log('[supabase:createRecipe] inserting recipe:', { name, createdBy });
     // 1. Create Recipe
     const { data: recipe, error: rError } = await supabase
         .from('recipes')
@@ -114,7 +126,12 @@ export async function createRecipe({ name, createdBy, initialData }) {
         .select()
         .single();
 
-    if (rError) throw rError;
+    if (rError) {
+        console.error('[supabase:createRecipe] recipe insert failed:', rError);
+        throw rError;
+    }
+
+    console.log('[supabase:createRecipe] recipe created, inserting version:', recipe.id);
 
     // 2. Create Initial Draft Version
     const { error: vError } = await supabase
@@ -128,6 +145,7 @@ export async function createRecipe({ name, createdBy, initialData }) {
         });
 
     if (vError) {
+        console.error('[supabase:createRecipe] version insert failed:', vError);
         // Cleanup if version creation fails (optional but good practice)
         await supabase.from('recipes').delete().eq('id', recipe.id);
         throw vError;

@@ -1,7 +1,7 @@
-import { Router } from 'express';
 import {
   attachSupabaseUserId,
   authenticateUser,
+  changePassword,
   ensureBootstrapManager,
   getUserByEmail,
   getUserById,
@@ -11,6 +11,7 @@ import {
 import { signAuthToken } from '../lib/auth.crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createSupabaseClient, hasSupabaseConfig } from '../lib/supabase.js';
+import { Router } from 'express';
 
 const router = Router();
 
@@ -98,6 +99,25 @@ router.get('/me', requireAuth, async (req, res, next) => {
     const user = await getUserById(req.auth.payload.sub);
     if (!user) return res.status(401).json({ error: 'unauthorized' });
     res.json({ user });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/change-password', requireAuth, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'invalid_payload' });
+    }
+
+    await changePassword({
+      userId: req.auth.payload.sub,
+      currentPassword,
+      newPassword,
+    });
+
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

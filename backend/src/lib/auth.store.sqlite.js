@@ -154,6 +154,14 @@ export async function createUserWithIdentity({ username, role, passwordSaltB64, 
   return getUserById(result.lastInsertRowid);
 }
 
+export async function updateUserPassword(id, passwordSaltB64, passwordHashB64) {
+  await initAuthDb();
+  openDb()
+    .prepare(`update app_users set password_salt_b64 = ?, password_hash_b64 = ? where id = ?`)
+    .run(String(passwordSaltB64), String(passwordHashB64), Number(id));
+  return true;
+}
+
 export async function listUsers() {
   await initAuthDb();
   const rows = openDb()

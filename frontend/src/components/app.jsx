@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Layout from './layout';
 import ChefPortal from './ChefPortal.jsx';
+import ChefMenu from './ChefMenu.jsx';
+import ChefAddRecipe from './ChefAddRecipe.jsx';
 import CookPortal from './CookPortal.jsx';
 import ManagerDashboard from './managerDashboard.jsx';
 import SettingsPage from './SettingsPage.jsx';
@@ -12,8 +14,10 @@ const NAV_ITEMS = [
   { id: 'staff', roles: ['Manager'] },
   { id: 'costing', roles: ['Manager'] },
   { id: 'reports', roles: ['Manager'] },
-  { id: 'cook', roles: ['Chef', 'Cook'] },
-  { id: 'recipes', roles: ['Chef'] },
+  { id: 'cook', roles: ['Cook'] },
+  { id: 'menu', roles: ['Chef'] },
+  { id: 'view-recipes', roles: ['Chef'] },
+  { id: 'add-recipe', roles: ['Chef'] },
   { id: 'settings', roles: ['Manager'] },
 ];
 
@@ -27,7 +31,7 @@ export default function App({ session, onLogout }) {
 
   const defaultNav = useMemo(() => {
     if (userRole === 'Manager') return 'overview';
-    if (userRole === 'Chef') return 'recipes';
+    if (userRole === 'Chef') return 'menu';
     return 'cook';
   }, [userRole]);
 
@@ -43,7 +47,9 @@ export default function App({ session, onLogout }) {
   const renderContent = () => {
     if (activeNav === 'settings') return <SettingsPage session={session} />;
     if (activeNav === 'cook') return <CookPortal />;
-    if (activeNav === 'recipes') return <ChefPortal />;
+    if (activeNav === 'view-recipes') return <ChefPortal />;
+    if (activeNav === 'add-recipe') return <ChefAddRecipe />;
+    if (activeNav === 'menu') return <ChefMenu />;
 
     if (userRole === 'Manager') {
       return <ManagerDashboard initialTab={activeNav} title={activeNav.charAt(0).toUpperCase() + activeNav.slice(1)} />;

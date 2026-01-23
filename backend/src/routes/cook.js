@@ -5,7 +5,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
-router.use(requireAuth, requireRole(['manager', 'cook']));
+router.use(requireAuth, requireRole(['manager', 'cook', 'chef']));
 
 router.get('/menu', async (_req, res, next) => {
   try {

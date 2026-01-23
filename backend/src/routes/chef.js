@@ -15,6 +15,10 @@ const router = Router();
 
 router.use(requireAuth, requireRole(['manager', 'chef']));
 
+router.get('/debug', (req, res) => {
+  res.json({ user: req.user, auth: req.auth });
+});
+
 router.get('/recipes', async (_req, res, next) => {
   try {
     const recipes = await listRecipes();
@@ -24,15 +28,23 @@ router.get('/recipes', async (_req, res, next) => {
   }
 });
 
+const getUserId = (user) => {
+  const id = user?.supabaseUserId || user?.id;
+  // If it's a valid UUID, return it. Otherwise return null (nullable column supports this)
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id));
+  return isUuid ? id : null;
+};
+
 router.post('/recipes', async (req, res, next) => {
   try {
     const name = String(req.body?.name ?? '').trim();
     if (!name) return res.status(400).json({ error: 'invalid_payload' });
 
     const initial = normalizeRecipeData(req.body);
-    const created = await createRecipe({ name, createdBy: req.user.id, initialData: initial });
+    const created = await createRecipe({ name, createdBy: getUserId(req.user), initialData: initial });
     res.status(201).json(created);
   } catch (err) {
+    console.error('[chef:post:recipes] error:', err);
     next(err);
   }
 });
@@ -45,6 +57,7 @@ router.delete('/recipes/:id', async (req, res, next) => {
     await deleteRecipe(id);
     res.json({ ok: true });
   } catch (err) {
+    console.error('[chef:delete:recipes] error:', err);
     next(err);
   }
 });
@@ -58,6 +71,7 @@ router.get('/recipes/:id', async (req, res, next) => {
     if (!recipe) return res.status(404).json({ error: 'not_found' });
     res.json({ recipe });
   } catch (err) {
+    console.error('[chef:get:recipe] error:', err);
     next(err);
   }
 });
@@ -72,6 +86,7 @@ router.get('/recipes/:id/versions/:version', async (req, res, next) => {
     if (!v) return res.status(404).json({ error: 'not_found' });
     res.json({ version: v });
   } catch (err) {
+    console.error('[chef:get:version] error:', err);
     next(err);
   }
 });
@@ -82,10 +97,11 @@ router.post('/recipes/:id/versions', async (req, res, next) => {
     if (!recipeId) return res.status(400).json({ error: 'invalid_recipe_id' });
 
     const data = normalizeRecipeData(req.body);
-    const created = await createRecipeVersion({ recipeId, createdBy: req.user.id, data });
+    const created = await createRecipeVersion({ recipeId, createdBy: getUserId(req.user), data });
     if (!created) return res.status(404).json({ error: 'not_found' });
     res.status(201).json({ version: created });
   } catch (err) {
+    console.error('[chef:post:version] error:', err);
     next(err);
   }
 });
@@ -97,11 +113,12 @@ router.put('/recipes/:id/versions/:version', async (req, res, next) => {
     if (!recipeId || !Number.isFinite(version)) return res.status(400).json({ error: 'invalid_params' });
 
     const data = normalizeRecipeData(req.body);
-    const updated = await updateDraftRecipeVersion({ recipeId, version, updatedBy: req.user.id, data });
+    const updated = await updateDraftRecipeVersion({ recipeId, version, updatedBy: getUserId(req.user), data });
     if (!updated) return res.status(404).json({ error: 'not_found' });
     if (updated === 'not_draft') return res.status(409).json({ error: 'version_not_draft' });
     res.json({ version: updated });
   } catch (err) {
+    console.error('[chef:put:version] error:', err);
     next(err);
   }
 });
@@ -112,11 +129,12 @@ router.post('/recipes/:id/versions/:version/release', async (req, res, next) => 
     const version = Number(req.params.version);
     if (!recipeId || !Number.isFinite(version)) return res.status(400).json({ error: 'invalid_params' });
 
-    const released = await releaseRecipeVersion({ recipeId, version, releasedBy: req.user.id });
+    const released = await releaseRecipeVersion({ recipeId, version, releasedBy: getUserId(req.user) });
     if (!released) return res.status(404).json({ error: 'not_found' });
     if (released === 'not_draft') return res.status(409).json({ error: 'version_not_draft' });
     res.json({ version: released });
   } catch (err) {
+    console.error('[chef:post:release] error:', err);
     next(err);
   }
 });

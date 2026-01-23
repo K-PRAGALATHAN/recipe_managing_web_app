@@ -1,6 +1,10 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, Building2, Calculator, CheckCircle2, Download, KeyRound, Package, Plus, Trash2, UserPlus, Users, XCircle } from 'lucide-react';
 import { createUser } from '../utils/adminApi';
+import {
+  listVendors, createVendor as apiCreateVendor, updateVendor as apiUpdateVendor, deleteVendor as apiDeleteVendor,
+  listIngredients, createIngredient as apiCreateIngredient, updateIngredient as apiUpdateIngredient, deleteIngredient as apiDeleteIngredient
+} from '../utils/managerApi';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(
@@ -37,9 +41,13 @@ const randomPassword = (length = 16) => {
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+<<<<<<< HEAD
 
 
 import { getSessionToken } from '../utils/authSession';
+=======
+const INITIAL_VENDORS = [];
+>>>>>>> 37eed91 (Update backend and frontend logic)
 
 export default function ManagerDashboard({ initialTab = 'overview', title = 'Manager' }) {
   const [tab, setTab] = useState(initialTab);
@@ -171,6 +179,7 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
   const buttonSecondary =
     'inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-semibold text-zinc-100 transition hover:border-orange-500/60';
 
+<<<<<<< HEAD
   const addVendor = async () => {
     const name = newVendor.name.trim();
     if (!name) return;
@@ -218,11 +227,70 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
         setVendors((prev) => prev.map((v) => (v.id === vendorId ? { ...v, active: !currentStatus } : v)));
       }
     } catch (e) { console.error(e); }
+=======
+  useEffect(() => {
+    let cancelled = false;
+    if (tab === 'vendors' || tab === 'inventory' || tab === 'overview') {
+      Promise.all([listVendors(), listIngredients()])
+        .then(([vendorsData, ingredientsData]) => {
+          if (!cancelled) {
+            setVendors(vendorsData);
+            setIngredients(ingredientsData);
+          }
+        })
+        .catch((err) => console.error('[Manager] failed to load data:', err));
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [tab]);
+
+  const addVendor = async () => {
+    const name = newVendor.name.trim();
+    if (!name) return;
+    try {
+      const created = await apiCreateVendor({
+        name,
+        contact: newVendor.contact.trim() || '—',
+        leadTimeDays: Math.max(0, Number(newVendor.leadTimeDays) || 0),
+      });
+      setVendors((prev) => [created, ...prev]);
+      setNewVendor({ name: '', contact: '', leadTimeDays: 2 });
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Failed to create vendor');
+    }
+  };
+
+  const removeVendor = async (vendorId) => {
+    if (!window.confirm('Remove this vendor?')) return;
+    try {
+      await apiDeleteVendor(vendorId);
+      setVendors((prev) => prev.filter((v) => v.id !== vendorId));
+      // Previously we cleared vendorId from ingredients, but now they are linked in DB which might enforce referential integrity or set null.
+      // We'll optimistically update any ingredients in view to clear the vendorId
+      setIngredients((prev) => prev.map((i) => (i.vendorId === vendorId ? { ...i, vendorId: null } : i)));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to remove vendor');
+    }
+  };
+
+  const toggleVendorActive = async (vendorId, currentActive) => {
+    try {
+      const updated = await apiUpdateVendor(vendorId, { active: !currentActive });
+      setVendors((prev) => prev.map((v) => (v.id === vendorId ? updated : v)));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update vendor');
+    }
+>>>>>>> 37eed91 (Update backend and frontend logic)
   };
 
   const addIngredient = async () => {
     const name = newIngredient.name.trim();
     if (!name) return;
+<<<<<<< HEAD
     if (!newIngredient.vendorId) {
       setIngredientError('Please select a vendor.');
       return;
@@ -231,11 +299,16 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
 
     try {
       const payload = {
+=======
+    try {
+      const created = await apiCreateIngredient({
+>>>>>>> 37eed91 (Update backend and frontend logic)
         name,
         unit: newIngredient.unit.trim() || 'unit',
         unitCost: Math.max(0, Number(newIngredient.unitCost) || 0),
         onHand: Math.max(0, Number(newIngredient.onHand) || 0),
         parLevel: Math.max(0, Number(newIngredient.parLevel) || 0),
+<<<<<<< HEAD
         vendorId: newIngredient.vendorId || ''
       };
 
@@ -297,6 +370,45 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
   };
 
   const logWaste = async () => {
+=======
+        vendorId: newIngredient.vendorId || null,
+      });
+      setIngredients((prev) => [...prev, created]);
+      setNewIngredient((prev) => ({ ...prev, name: '', unitCost: 0, onHand: 0, parLevel: 0 }));
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Failed to create ingredient');
+    }
+  };
+
+  const removeIngredient = async (id) => {
+    if (!window.confirm('Remove this ingredient?')) return;
+    try {
+      await apiDeleteIngredient(id);
+      setIngredients((prev) => prev.filter(i => i.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete ingredient');
+    }
+  };
+
+  // Updates local state immediately for inputs
+  const handleIngredientChange = (ingredientId, patch) =>
+    setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? { ...i, ...patch } : i)));
+
+  // Persists changes to the server
+  const saveIngredient = async (ingredientId, patch) => {
+    try {
+      const updated = await apiUpdateIngredient(ingredientId, patch);
+      setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? updated : i)));
+    } catch (err) {
+      console.error('[Manager] failed to save ingredient:', err);
+      // Optional: revert logic could go here
+    }
+  };
+
+  const logWaste = () => {
+>>>>>>> 37eed91 (Update backend and frontend logic)
     const qty = Number(wasteDraft.qty);
     if (!wasteDraft.ingredientId) {
       alert("Please select an ingredient.");
@@ -524,7 +636,11 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                       </td>
                       <td className="py-3 pr-4">
                         <div className="flex flex-wrap gap-2">
+<<<<<<< HEAD
                           <button type="button" className={buttonSecondary} onClick={() => toggleVendorStatus(v.id, v.active)}>
+=======
+                          <button type="button" className={buttonSecondary} onClick={() => toggleVendorActive(v.id, v.active)}>
+>>>>>>> 37eed91 (Update backend and frontend logic)
                             {v.active ? 'Deactivate' : 'Activate'}
                           </button>
                           <button type="button" className={buttonSecondary} onClick={() => removeVendor(v.id)}>
@@ -609,9 +725,9 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <button type="button" className={buttonSecondary} onClick={() => updateIngredient(i.id, { onHand: Math.max(0, Number(i.onHand) - 1) })}>−1</button>
-                        <button type="button" className={buttonSecondary} onClick={() => updateIngredient(i.id, { onHand: Number(i.onHand) + 1 })}>+1</button>
-                        <button type="button" className={buttonSecondary} onClick={() => setIngredients((prev) => prev.filter((x) => x.id !== i.id))}>
+                        <button type="button" className={buttonSecondary} onClick={() => saveIngredient(i.id, { onHand: Math.max(0, Number(i.onHand) - 1) })}>−1</button>
+                        <button type="button" className={buttonSecondary} onClick={() => saveIngredient(i.id, { onHand: Number(i.onHand) + 1 })}>+1</button>
+                        <button type="button" className={buttonSecondary} onClick={() => removeIngredient(i.id)}>
                           <Trash2 size={16} />
                           Remove
                         </button>
@@ -621,19 +737,52 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                     <div className="mt-4 grid gap-3 md:grid-cols-4">
                       <div>
                         <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">On Hand</label>
-                        <input className={input} type="number" min="0" step="0.1" value={i.onHand} onChange={(e) => updateIngredient(i.id, { onHand: e.target.value })} />
+                        <input
+                          className={input}
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={i.onHand}
+                          onChange={(e) => handleIngredientChange(i.id, { onHand: e.target.value })}
+                          onBlur={(e) => saveIngredient(i.id, { onHand: e.target.value })}
+                        />
                       </div>
                       <div>
                         <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Par</label>
-                        <input className={input} type="number" min="0" step="0.1" value={i.parLevel} onChange={(e) => updateIngredient(i.id, { parLevel: e.target.value })} />
+                        <input
+                          className={input}
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={i.parLevel}
+                          onChange={(e) => handleIngredientChange(i.id, { parLevel: e.target.value })}
+                          onBlur={(e) => saveIngredient(i.id, { parLevel: e.target.value })}
+                        />
                       </div>
                       <div>
                         <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Unit Cost</label>
-                        <input className={input} type="number" min="0" step="0.01" value={i.unitCost} onChange={(e) => updateIngredient(i.id, { unitCost: e.target.value })} />
+                        <input
+                          className={input}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={i.unitCost}
+                          onChange={(e) => handleIngredientChange(i.id, { unitCost: e.target.value })}
+                          onBlur={(e) => saveIngredient(i.id, { unitCost: e.target.value })}
+                        />
                       </div>
                       <div>
                         <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Vendor</label>
-                        <select className={input} value={i.vendorId || ''} onChange={(e) => updateIngredient(i.id, { vendorId: e.target.value })}>
+                        <select
+                          className={input}
+                          value={i.vendorId || ''}
+                          onChange={(e) => {
+                            handleIngredientChange(i.id, { vendorId: e.target.value });
+                            // For select, we can save immediately on change as well, or wait for blur.
+                            // Typically select is immediate.
+                            saveIngredient(i.id, { vendorId: e.target.value });
+                          }}
+                        >
                           <option value="">—</option>
                           {vendors.map((v) => (
                             <option key={v.id} value={v.id}>{v.name}</option>
