@@ -5,6 +5,7 @@ import {
   listVendors, createVendor as apiCreateVendor, updateVendor as apiUpdateVendor, deleteVendor as apiDeleteVendor,
   listIngredients, createIngredient as apiCreateIngredient, updateIngredient as apiUpdateIngredient, deleteIngredient as apiDeleteIngredient
 } from '../utils/managerApi';
+import { getSessionToken } from '../utils/authSession';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(
@@ -40,14 +41,6 @@ const randomPassword = (length = 16) => {
 };
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-<<<<<<< HEAD
-
-
-import { getSessionToken } from '../utils/authSession';
-=======
-const INITIAL_VENDORS = [];
->>>>>>> 37eed91 (Update backend and frontend logic)
 
 export default function ManagerDashboard({ initialTab = 'overview', title = 'Manager' }) {
   const [tab, setTab] = useState(initialTab);
@@ -92,11 +85,7 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
         }
         if (iRes.ok) {
           const data = await iRes.json();
-          // Map DB snake_case to frontend camelCase if needed, but we try to keep it consistent
-          // The backend routes return objects with snake_case keys for DB columns usually, 
-          // let's adjust to what the UI expects (camelCase) or update UI. 
-          // UI expects: id, name, unit, unitCost, onHand, parLevel, vendorId
-          // Backend sends: id, name, unit, unit_cost, on_hand, par_level, vendor_id
+          // Map DB snake_case to frontend camelCase if needed
           const items = (data.ingredients || []).map(i => ({
             id: i.id,
             name: i.name,
@@ -110,8 +99,6 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
         }
         if (wRes.ok) {
           const data = await wRes.json();
-          // UI expects: id, at, ingredientId, qty, reason
-          // Backend sends: id, created_at, ingredient_id, amount, reason
           const logs = (data.wastage || []).map(w => ({
             id: w.id,
             at: w.created_at,
@@ -179,7 +166,6 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
   const buttonSecondary =
     'inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-semibold text-zinc-100 transition hover:border-orange-500/60';
 
-<<<<<<< HEAD
   const addVendor = async () => {
     const name = newVendor.name.trim();
     if (!name) return;
@@ -211,7 +197,6 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
         headers: { Authorization: `Bearer ${token}` }
       });
       setVendors((prev) => prev.filter((v) => v.id !== vendorId));
-      // We probably should update ingredients too, but for now just UI side cleaup
       setIngredients((prev) => prev.map((i) => (i.vendorId === vendorId ? { ...i, vendorId: '' } : i)));
     } catch (e) { console.error(e); }
   };
@@ -227,70 +212,11 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
         setVendors((prev) => prev.map((v) => (v.id === vendorId ? { ...v, active: !currentStatus } : v)));
       }
     } catch (e) { console.error(e); }
-=======
-  useEffect(() => {
-    let cancelled = false;
-    if (tab === 'vendors' || tab === 'inventory' || tab === 'overview') {
-      Promise.all([listVendors(), listIngredients()])
-        .then(([vendorsData, ingredientsData]) => {
-          if (!cancelled) {
-            setVendors(vendorsData);
-            setIngredients(ingredientsData);
-          }
-        })
-        .catch((err) => console.error('[Manager] failed to load data:', err));
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [tab]);
-
-  const addVendor = async () => {
-    const name = newVendor.name.trim();
-    if (!name) return;
-    try {
-      const created = await apiCreateVendor({
-        name,
-        contact: newVendor.contact.trim() || '—',
-        leadTimeDays: Math.max(0, Number(newVendor.leadTimeDays) || 0),
-      });
-      setVendors((prev) => [created, ...prev]);
-      setNewVendor({ name: '', contact: '', leadTimeDays: 2 });
-    } catch (err) {
-      console.error(err);
-      alert(err.message || 'Failed to create vendor');
-    }
-  };
-
-  const removeVendor = async (vendorId) => {
-    if (!window.confirm('Remove this vendor?')) return;
-    try {
-      await apiDeleteVendor(vendorId);
-      setVendors((prev) => prev.filter((v) => v.id !== vendorId));
-      // Previously we cleared vendorId from ingredients, but now they are linked in DB which might enforce referential integrity or set null.
-      // We'll optimistically update any ingredients in view to clear the vendorId
-      setIngredients((prev) => prev.map((i) => (i.vendorId === vendorId ? { ...i, vendorId: null } : i)));
-    } catch (err) {
-      console.error(err);
-      alert('Failed to remove vendor');
-    }
-  };
-
-  const toggleVendorActive = async (vendorId, currentActive) => {
-    try {
-      const updated = await apiUpdateVendor(vendorId, { active: !currentActive });
-      setVendors((prev) => prev.map((v) => (v.id === vendorId ? updated : v)));
-    } catch (err) {
-      console.error(err);
-      alert('Failed to update vendor');
-    }
->>>>>>> 37eed91 (Update backend and frontend logic)
   };
 
   const addIngredient = async () => {
     const name = newIngredient.name.trim();
     if (!name) return;
-<<<<<<< HEAD
     if (!newIngredient.vendorId) {
       setIngredientError('Please select a vendor.');
       return;
@@ -299,16 +225,11 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
 
     try {
       const payload = {
-=======
-    try {
-      const created = await apiCreateIngredient({
->>>>>>> 37eed91 (Update backend and frontend logic)
         name,
         unit: newIngredient.unit.trim() || 'unit',
         unitCost: Math.max(0, Number(newIngredient.unitCost) || 0),
         onHand: Math.max(0, Number(newIngredient.onHand) || 0),
         parLevel: Math.max(0, Number(newIngredient.parLevel) || 0),
-<<<<<<< HEAD
         vendorId: newIngredient.vendorId || ''
       };
 
@@ -320,7 +241,6 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
 
       if (res.ok) {
         const { ingredient } = await res.json();
-        // Convert back to camelCase for state
         const newItem = {
           id: ingredient.id,
           name: ingredient.name,
@@ -337,8 +257,6 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
   };
 
   const updateIngredient = async (ingredientId, patch) => {
-    // patch keys need to be snake_case for API if we are sending them directly,
-    // or we handle conversion. The UI passes camelCase.
     const apiPatch = {};
     if (patch.onHand !== undefined) apiPatch.onHand = patch.onHand;
     if (patch.parLevel !== undefined) apiPatch.parLevel = patch.parLevel;
@@ -354,7 +272,6 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
 
       if (res.ok) {
         const { ingredient } = await res.json();
-        // Update local state with the returned (authoritative) data
         const updatedItem = {
           id: ingredient.id,
           name: ingredient.name,
@@ -367,18 +284,6 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
         setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? updatedItem : i)));
       }
     } catch (e) { console.error(e); }
-  };
-
-  const logWaste = async () => {
-=======
-        vendorId: newIngredient.vendorId || null,
-      });
-      setIngredients((prev) => [...prev, created]);
-      setNewIngredient((prev) => ({ ...prev, name: '', unitCost: 0, onHand: 0, parLevel: 0 }));
-    } catch (err) {
-      console.error(err);
-      alert(err.message || 'Failed to create ingredient');
-    }
   };
 
   const removeIngredient = async (id) => {
@@ -398,17 +303,10 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
 
   // Persists changes to the server
   const saveIngredient = async (ingredientId, patch) => {
-    try {
-      const updated = await apiUpdateIngredient(ingredientId, patch);
-      setIngredients((prev) => prev.map((i) => (i.id === ingredientId ? updated : i)));
-    } catch (err) {
-      console.error('[Manager] failed to save ingredient:', err);
-      // Optional: revert logic could go here
-    }
+    await updateIngredient(ingredientId, patch);
   };
 
-  const logWaste = () => {
->>>>>>> 37eed91 (Update backend and frontend logic)
+  const logWaste = async () => {
     const qty = Number(wasteDraft.qty);
     if (!wasteDraft.ingredientId) {
       alert("Please select an ingredient.");
@@ -636,11 +534,7 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                       </td>
                       <td className="py-3 pr-4">
                         <div className="flex flex-wrap gap-2">
-<<<<<<< HEAD
                           <button type="button" className={buttonSecondary} onClick={() => toggleVendorStatus(v.id, v.active)}>
-=======
-                          <button type="button" className={buttonSecondary} onClick={() => toggleVendorActive(v.id, v.active)}>
->>>>>>> 37eed91 (Update backend and frontend logic)
                             {v.active ? 'Deactivate' : 'Activate'}
                           </button>
                           <button type="button" className={buttonSecondary} onClick={() => removeVendor(v.id)}>
@@ -778,8 +672,6 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                           value={i.vendorId || ''}
                           onChange={(e) => {
                             handleIngredientChange(i.id, { vendorId: e.target.value });
-                            // For select, we can save immediately on change as well, or wait for blur.
-                            // Typically select is immediate.
                             saveIngredient(i.id, { vendorId: e.target.value });
                           }}
                         >
@@ -990,7 +882,7 @@ export default function ManagerDashboard({ initialTab = 'overview', title = 'Man
                   <div key={u.id} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-white">{u.email}</p>
-                      <p className="text-xs text-zinc-500">{u.role}  {new Date(u.at).toLocaleString()}</p>
+                      <p className="text-xs text-zinc-500">{u.role}   {new Date(u.at).toLocaleString()}</p>
                     </div>
                     <span className="inline-flex items-center rounded-full bg-orange-500/10 px-2 py-1 text-xs font-bold text-orange-300">
                       {u.role}
